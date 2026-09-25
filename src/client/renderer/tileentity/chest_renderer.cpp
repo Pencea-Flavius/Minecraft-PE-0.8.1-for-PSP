@@ -68,6 +68,8 @@ void renderChestTile(ChestTileEntity* chest, float a) {
     ensureAssets();
     if (!s_singleOk) return;
 
+    chest->resolvePendingPair();
+
     const bool dbl = (chest->pair != 0);
     if (dbl && !chest->isMaster()) return;
     if (dbl && !s_doubleOk) return;

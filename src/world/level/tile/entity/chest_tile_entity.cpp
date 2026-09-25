@@ -100,6 +100,7 @@ float ChestTileEntity::getModelOffsetX() const {
 void ChestTileEntity::resolvePendingPair() {
     if (!pairPending || pair || !level) return;
 
+    if (!level->isLoadedAt((float)pairX, (float)pairZ)) return;
     if (level->getTile(pairX, y, pairZ) != BLOCK_CHEST) { pairPending = false; return; }
     TileEntity* t = level->getTileEntity(pairX, y, pairZ);
     if (!t || t->type != TE_CHEST) return;

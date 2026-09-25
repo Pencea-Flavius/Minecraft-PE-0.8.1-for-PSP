@@ -57,7 +57,6 @@ public:
     enum { LID_SOUND_NONE = 0, LID_SOUND_OPEN = 1, LID_SOUND_CLOSE = 2 };
     int stepOpenness();
 
-private:
     void resolvePendingPair();
 };
 
