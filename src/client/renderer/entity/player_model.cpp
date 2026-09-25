@@ -1,0 +1,584 @@
+
+#include "client/renderer/entity/player_model.h"
+#include "client/renderer/entity/mob_model.h"
+#include "platform/dcache.h"
+#include <pspgu.h>
+#include <pspgum.h>
+#include <pspkernel.h>
+#include <math.h>
+#include <string.h>
+#include <stdio.h>
+#include "world/item/armor_item.h"
+#include "client/renderer/item_anim_icon.h"
+
+#include "gpu/texture.h"
+#include "platform/time.h"
+#include "world/level/level.h"
+#include "world/level/world.h"
+#include "world/level/chunk/chunk.h"
+#include "world/entity/local_player.h"
+#include "client/player/player_state.h"
+#include "client/renderer/item_hand.h"
+#include "client/renderer/item_model.h"
+#include "client/renderer/entity/entity_renderer.h"
+#include "client/renderer/particle.h"
+#include "world/inventory/inventory.h"
+#include "world/item/item_instance.h"
+#include "world/item/item.h"
+
+extern Level   g_level;
+extern World   g_world;
+extern float   g_attackAnim, g_oAttackAnim;
+extern Texture g_terrain;
+extern bool    g_haveTerrain;
+
+static const float DEG2RAD = 3.14159265f / 180.0f;
+static const float PIF     = 3.14159265f;
+
+struct Part { MobVertex base[36]; float px, py, pz; float xRot, yRot, zRot; };
+
+enum { P_HEAD, P_BODY, P_ARM0, P_ARM1, P_LEG0, P_LEG1, P_HAT, P_COUNT };
+static Part parts[P_COUNT];
+static bool g_built = false;
+
+static inline void buildBox(MobVertex* out,
+                     float x0, float y0, float z0, float x1, float y1, float z1,
+                     int tx, int ty, int w, int h, int d, bool mirror, float texH = 32.0f) {
+    mobBuildBox(out, x0,y0,z0, x1,y1,z1, tx,ty, w,h,d, mirror, 0.0f, 64.0f, texH, true);
+}
+
+static MobVertex g_base64[P_COUNT][36];
+static MobVertex g_over64[P_COUNT][36];
+static bool      g_built64 = false;
+
+static void buildParts64(void) {
+    if (g_built64) return;
+    const float H = 64.0f, g = 0.25f;
+    buildBox(g_base64[P_HEAD], -4,-8,-4,  4, 0, 4,  0,  0, 8,8,8, false, H);
+    buildBox(g_base64[P_BODY], -4, 0,-2,  4,12, 2, 16, 16, 8,12,4, false, H);
+    buildBox(g_base64[P_ARM0], -3,-2,-2,  1,10, 2, 40, 16, 4,12,4, false, H);
+    buildBox(g_base64[P_ARM1], -1,-2,-2,  3,10, 2, 32, 48, 4,12,4, false, H);
+    buildBox(g_base64[P_LEG0], -2, 0,-2,  2,12, 2,  0, 16, 4,12,4, false, H);
+    buildBox(g_base64[P_LEG1], -2, 0,-2,  2,12, 2, 16, 48, 4,12,4, false, H);
+    buildBox(g_base64[P_HAT],  -4.5f,-8.5f,-4.5f, 4.5f,0.5f,4.5f, 32, 0, 8,8,8, false, H);
+    buildBox(g_over64[P_BODY], -4-g, 0-g,-2-g,  4+g,12+g, 2+g, 16, 32, 8,12,4, false, H);
+    buildBox(g_over64[P_ARM0], -3-g,-2-g,-2-g,  1+g,10+g, 2+g, 40, 32, 4,12,4, false, H);
+    buildBox(g_over64[P_ARM1], -1-g,-2-g,-2-g,  3+g,10+g, 2+g, 48, 48, 4,12,4, false, H);
+    buildBox(g_over64[P_LEG0], -2-g, 0-g,-2-g,  2+g,12+g, 2+g,  0, 32, 4,12,4, false, H);
+    buildBox(g_over64[P_LEG1], -2-g, 0-g,-2-g,  2+g,12+g, 2+g,  0, 48, 4,12,4, false, H);
+    dcacheFlush(g_base64, sizeof(g_base64));
+    dcacheFlush(g_over64, sizeof(g_over64));
+    g_built64 = true;
+}
+
+Texture* skinTexture(void) {
+    static Texture tex;
+    static int state = 0;
+    if (!state)
+        state = (textureLoad16("data/images/skins/skin.png", &tex, GU_PSM_5551) ||
+                 textureLoad16("data/images/skins/char.png", &tex, GU_PSM_5551)) ? 1 : -1;
+    return state > 0 ? &tex : 0;
+}
+
+static inline bool isTall(const Texture* t) { return t && t->realW == 64 && t->realH == 64; }
+
+static void buildParts(void) {
+    if (g_built) return;
+
+    buildBox(parts[P_HEAD].base, -4,-8,-4,  4, 0, 4,  0,  0, 8,8,8, false);
+    parts[P_HEAD].px = 0;  parts[P_HEAD].py = 0;  parts[P_HEAD].pz = 0;
+
+    buildBox(parts[P_BODY].base, -4, 0,-2,  4,12, 2, 16, 16, 8,12,4, false);
+    parts[P_BODY].px = 0;  parts[P_BODY].py = 0;  parts[P_BODY].pz = 0;
+
+    buildBox(parts[P_ARM0].base, -3,-2,-2,  1,10, 2, 40, 16, 4,12,4, false);
+    parts[P_ARM0].px = -5; parts[P_ARM0].py = 2;  parts[P_ARM0].pz = 0;
+
+    buildBox(parts[P_ARM1].base, -1,-2,-2,  3,10, 2, 40, 16, 4,12,4, true);
+    parts[P_ARM1].px = 5;  parts[P_ARM1].py = 2;  parts[P_ARM1].pz = 0;
+
+    buildBox(parts[P_LEG0].base, -2, 0,-2,  2,12, 2,  0, 16, 4,12,4, false);
+
+    parts[P_LEG0].px = -1.9f; parts[P_LEG0].py = 12; parts[P_LEG0].pz = 0;
+
+    buildBox(parts[P_LEG1].base, -2, 0,-2,  2,12, 2,  0, 16, 4,12,4, true);
+    parts[P_LEG1].px = 1.9f; parts[P_LEG1].py = 12; parts[P_LEG1].pz = 0;
+
+    buildBox(parts[P_HAT].base, -4.5f,-8.5f,-4.5f,  4.5f, 0.5f, 4.5f, 32, 0, 8,8,8, false);
+    parts[P_HAT].px = 0;   parts[P_HAT].py = 0;  parts[P_HAT].pz = 0;
+    dcacheFlush(parts, sizeof(parts));
+    g_built = true;
+}
+
+static MobVertex g_armor1[P_HAT][36];
+static MobVertex g_armor05[P_HAT][36];
+static bool      g_armorBuilt = false;
+
+static void buildArmorSet(MobVertex set[][36], float inf) {
+    buildBox(set[P_HEAD], -4-inf,-8-inf,-4-inf,  4+inf, 0+inf, 4+inf,  0,  0, 8,8,8, false);
+    buildBox(set[P_BODY], -4-inf, 0-inf,-2-inf,  4+inf,12+inf, 2+inf, 16, 16, 8,12,4, false);
+    buildBox(set[P_ARM0], -3-inf,-2-inf,-2-inf,  1+inf,10+inf, 2+inf, 40, 16, 4,12,4, false);
+    buildBox(set[P_ARM1], -1-inf,-2-inf,-2-inf,  3+inf,10+inf, 2+inf, 40, 16, 4,12,4, true);
+    buildBox(set[P_LEG0], -2-inf, 0-inf,-2-inf,  2+inf,12+inf, 2+inf,  0, 16, 4,12,4, false);
+    buildBox(set[P_LEG1], -2-inf, 0-inf,-2-inf,  2+inf,12+inf, 2+inf,  0, 16, 4,12,4, true);
+}
+static void buildArmor() {
+    if (g_armorBuilt) return;
+    buildArmorSet(g_armor1, 1.0f);
+    buildArmorSet(g_armor05, 0.5f);
+    dcacheFlush(g_armor1,  sizeof(g_armor1));
+    dcacheFlush(g_armor05, sizeof(g_armor05));
+    g_armorBuilt = true;
+}
+
+static Texture g_armorTex[5][2];
+static bool    g_armorTried[5][2];
+static bool    g_armorOK[5][2];
+static Texture* armorTexture(int mat, int file) {
+    if (mat < 0 || mat > 4 || file < 0 || file > 1) return 0;
+    if (!g_armorTried[mat][file]) {
+        static const char* nm[5] = { "cloth", "chain", "iron", "diamond", "gold" };
+        char path[80];
+        snprintf(path, sizeof path, "data/images/armor/%s_%d.png", nm[mat], file + 1);
+        g_armorOK[mat][file] = textureLoad16(path, &g_armorTex[mat][file], GU_PSM_5551);
+        g_armorTried[mat][file] = true;
+    }
+    return g_armorOK[mat][file] ? &g_armorTex[mat][file] : 0;
+}
+
+static void drawArmorLayers(unsigned int brCol, bool lit, const float* toWorld, bool overlay = false) {
+
+    LocalPlayer* p = g_level.player;
+    if (!p) return;
+
+    if (!overlay) sceGuColor(brCol);
+    buildArmor();
+
+    sceGuEnable(GU_ALPHA_TEST);
+    sceGuAlphaFunc(GU_GREATER, 0, 0xff);
+    struct ArmorLayer { int slot; const int* parts; int n; int file; bool inner; };
+    static const int legParts[3]   = { P_BODY, P_LEG0, P_LEG1 };
+    static const int feetParts[2]  = { P_LEG0, P_LEG1 };
+    static const int torsoParts[3] = { P_BODY, P_ARM0, P_ARM1 };
+    static const int headParts[1]  = { P_HEAD };
+    static const ArmorLayer layers[4] = {
+        { ArmorItem::SLOT_LEGS,  legParts,   3, 1, true  },
+        { ArmorItem::SLOT_FEET,  feetParts,  2, 0, false },
+        { ArmorItem::SLOT_TORSO, torsoParts, 3, 0, false },
+        { ArmorItem::SLOT_HEAD,  headParts,  1, 0, false },
+    };
+    for (int li = 0; li < 4; li++) {
+        const ArmorLayer& ly = layers[li];
+        ItemInstance& ai = p->armor[ly.slot];
+        if (ai.isNull()) continue;
+        Item* it = ai.getItem();
+        if (!it || !it->isArmor()) continue;
+        Texture* tex = armorTexture((ai.id - 298) / 4, ly.file);
+        if (!tex) continue;
+        textureBind(tex);
+        MobVertex (*set)[36] = ly.inner ? g_armor05 : g_armor1;
+        for (int k = 0; k < ly.n; k++) {
+            int i = ly.parts[k];
+            sceGumPushMatrix();
+            ScePspFVector3 piv = { parts[i].px, parts[i].py, parts[i].pz };
+            sceGumTranslate(&piv);
+            if (parts[i].zRot != 0.0f) sceGumRotateZ(parts[i].zRot);
+            if (parts[i].yRot != 0.0f) sceGumRotateY(parts[i].yRot);
+            if (parts[i].xRot != 0.0f) sceGumRotateX(parts[i].xRot);
+            if (overlay) {
+                mobDrawPartPlain(set[i]);
+            } else if (lit) {
+                mobDrawPartLit(set[i], brCol, toWorld);
+            } else {
+                sceGumDrawArray(GU_TRIANGLES,
+                    GU_TEXTURE_32BITF | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
+                    36, 0, set[i]);
+            }
+            sceGumPopMatrix();
+        }
+    }
+}
+
+static void setPivots(bool sneaking) {
+    parts[P_HEAD].py = sneaking ? 1.0f : 0.0f;
+    parts[P_LEG0].py = parts[P_LEG1].py = sneaking ? 9.0f : 12.0f;
+
+    parts[P_LEG0].pz = parts[P_LEG1].pz = sneaking ? 4.0f : 0.1f;
+    parts[P_ARM0].px = -5.0f; parts[P_ARM0].pz = 0.0f;
+    parts[P_ARM1].px =  5.0f; parts[P_ARM1].pz = 0.0f;
+}
+
+static int posePlayer(LocalPlayer* p, float a, float headYaw, float headPitch) {
+
+    float ws = p->walkAnimSpeedO + (p->walkAnimSpeed - p->walkAnimSpeedO) * a;
+    if (ws > 1.0f) ws = 1.0f;
+    float wp = p->walkAnimPos - p->walkAnimSpeed * (1.0f - a);
+    float t  = wp * 0.6662f;
+    float tcos0 = cosf(t) * ws, tcos1 = cosf(t + PIF) * ws;
+
+    parts[P_HEAD].xRot = headPitch; parts[P_HEAD].yRot = headYaw;
+    parts[P_BODY].xRot = parts[P_BODY].yRot = parts[P_BODY].zRot = 0.0f;
+    parts[P_ARM0].xRot = tcos1; parts[P_ARM0].yRot = parts[P_ARM0].zRot = 0.0f;
+    parts[P_ARM1].xRot = tcos0; parts[P_ARM1].yRot = parts[P_ARM1].zRot = 0.0f;
+    parts[P_LEG0].xRot = tcos0 * 1.4f; parts[P_LEG1].xRot = tcos1 * 1.4f;
+    parts[P_LEG0].yRot = parts[P_LEG1].yRot = 0.0f;
+
+    if (p->riding) {
+        const float HALF_PI = PIF * 0.5f;
+        parts[P_ARM0].xRot += -HALF_PI * 0.4f;
+        parts[P_ARM1].xRot += -HALF_PI * 0.4f;
+        parts[P_LEG0].xRot = -HALF_PI * 0.8f;
+        parts[P_LEG1].xRot = -HALF_PI * 0.8f;
+        parts[P_LEG0].yRot =  HALF_PI * 0.2f;
+        parts[P_LEG1].yRot = -HALF_PI * 0.2f;
+    }
+
+    ItemInstance* selHeld = p->inventory->getSelected();
+    bool holding = selHeld && !selHeld->isNull();
+
+    Item* useItem = p->isUsingItem() ? p->getUseItem()->getItem() : 0;
+    bool aiming = holding && useItem && useItem->getUseAnimation() == 4;
+
+    int  bowStage = aiming ? bowStageIcon((float)p->getTicksUsingItem())
+                           : (holding ? itemAnimStage(selHeld->id, p) : -1);
+
+    if (holding) parts[P_ARM0].xRot = parts[P_ARM0].xRot * 0.5f - PIF / 2.0f * 0.2f;
+
+    float ageT = gameSeconds() * 20.0f;
+
+    float bcos = cosf(ageT * 0.09f) * 0.05f + 0.05f;
+    float bsin = sinf(ageT * 0.067f) * 0.05f;
+    parts[P_ARM0].zRot += bcos; parts[P_ARM1].zRot -= bcos;
+    parts[P_ARM0].xRot += bsin; parts[P_ARM1].xRot -= bsin;
+
+    float diff = g_attackAnim - g_oAttackAnim; if (diff < 0.0f) diff += 1.0f;
+    float atk = g_oAttackAnim + diff * a; if (atk > 1.0f) atk -= 1.0f;
+
+    setPivots(p->sneaking);
+    if (atk > 0.001f) {
+        float f = 1.0f - atk; f *= f; f *= f; f = 1.0f - f;
+        float s1 = sinf(f * PIF);
+        parts[P_BODY].yRot  = sinf(sqrtf(atk) * PIF * 2.0f) * 0.2f;
+
+        parts[P_ARM0].pz =  sinf(parts[P_BODY].yRot) * 5.0f;
+        parts[P_ARM0].px = -cosf(parts[P_BODY].yRot) * 5.0f;
+        parts[P_ARM1].pz = -sinf(parts[P_BODY].yRot) * 5.0f;
+        parts[P_ARM1].px =  cosf(parts[P_BODY].yRot) * 5.0f;
+        parts[P_ARM0].yRot += parts[P_BODY].yRot;
+        parts[P_ARM1].yRot += parts[P_BODY].yRot;
+        parts[P_ARM1].xRot += parts[P_BODY].yRot;
+        parts[P_ARM0].xRot -= s1 * 1.2f + sinf(atk * PIF) * (0.7f - parts[P_HEAD].xRot) * 0.75f;
+        parts[P_ARM0].yRot += parts[P_BODY].yRot * 2.0f;
+        parts[P_ARM0].zRot += sinf(atk * PIF) * -0.4f;
+    }
+
+    if (aiming) {
+        float hx = parts[P_HEAD].xRot, hy = parts[P_HEAD].yRot;
+        parts[P_ARM0].zRot = 0.0f;            parts[P_ARM1].zRot = 0.0f;
+        parts[P_ARM0].yRot = -0.1f + hy;      parts[P_ARM1].yRot = 0.1f + hy + 0.4f;
+        parts[P_ARM0].xRot = -PIF / 2.0f + hx; parts[P_ARM1].xRot = -PIF / 2.0f + hx;
+        parts[P_ARM0].zRot += bcos; parts[P_ARM1].zRot -= bcos;
+        parts[P_ARM0].xRot += bsin; parts[P_ARM1].xRot -= bsin;
+    }
+
+    if (p->sneaking) {
+        parts[P_BODY].xRot += 0.5f;
+        parts[P_ARM0].xRot += 0.4f; parts[P_ARM1].xRot += 0.4f;
+    }
+
+    return bowStage;
+}
+
+static unsigned int playerLightColor(LocalPlayer* p, float ix, float iy, float iz) {
+    int bx = (int)floorf(ix), by = (int)floorf(iy), bz = (int)floorf(iz);
+    unsigned int brCol = brightColorFloored(lightRawAt(&g_world, bx, by, bz), ENTITY_LIGHT_FLOOR);
+
+    if (!p->isOnFire() && (p->hurtTime > 0 || p->deathTime > 0)) {
+        const unsigned int HURT_GB = 140;
+        unsigned int r  =  brCol         & 0xFFu;
+        unsigned int g  = (((brCol >> 8)  & 0xFFu) * HURT_GB) / 255;
+        unsigned int b  = (((brCol >> 16) & 0xFFu) * HURT_GB) / 255;
+        brCol = (brCol & 0xFF000000u) | (b << 16) | (g << 8) | r;
+    }
+    return brCol;
+}
+
+static void drawPlayerBody(unsigned int brCol, bool lit, const float* toWorld,
+                           bool armour = true) {
+    Texture* tex = skinTexture();
+
+    parts[P_HAT].px   = parts[P_HEAD].px;
+    parts[P_HAT].py   = parts[P_HEAD].py;
+    parts[P_HAT].pz   = parts[P_HEAD].pz;
+    parts[P_HAT].xRot = parts[P_HEAD].xRot;
+    parts[P_HAT].yRot = parts[P_HEAD].yRot;
+    parts[P_HAT].zRot = parts[P_HEAD].zRot;
+
+    sceGuEnable(GU_ALPHA_TEST);
+    sceGuAlphaFunc(GU_GREATER, 0, 0xff);
+
+    textureBind(tex);
+
+    sceGuTexWrap(GU_REPEAT, GU_REPEAT);
+    sceGuDisable(GU_CULL_FACE);
+    sceGuColor(brCol);
+
+    const bool tall = isTall(tex);
+    if (tall) buildParts64();
+    for (int i = 0; i < P_COUNT; i++) {
+        sceGumPushMatrix();
+        ScePspFVector3 piv = { parts[i].px, parts[i].py, parts[i].pz };
+        sceGumTranslate(&piv);
+        if (parts[i].zRot != 0.0f) sceGumRotateZ(parts[i].zRot);
+        if (parts[i].yRot != 0.0f) sceGumRotateY(parts[i].yRot);
+        if (parts[i].xRot != 0.0f) sceGumRotateX(parts[i].xRot);
+        const MobVertex* base = tall ? g_base64[i] : parts[i].base;
+
+        const MobVertex* over = (tall && i >= P_BODY && i <= P_LEG1) ? g_over64[i] : 0;
+        if (lit) {
+            mobDrawPartLit(base, brCol, toWorld);
+            if (over) mobDrawPartLit(over, brCol, toWorld);
+        } else {
+            sceGumDrawArray(GU_TRIANGLES,
+                            GU_TEXTURE_32BITF | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
+                            36, 0, base);
+            if (over)
+                sceGumDrawArray(GU_TRIANGLES,
+                                GU_TEXTURE_32BITF | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
+                                36, 0, over);
+        }
+        sceGumPopMatrix();
+    }
+    sceGuColor(brCol);
+    sceGuTexWrap(GU_CLAMP, GU_CLAMP);
+    if (armour) drawArmorLayers(brCol, lit, toWorld);
+
+    const float fireA = (lit && g_level.player) ? mobFireOverlayAlpha(g_level.player) : 0.0f;
+    if (fireA > 0.0f) {
+        const int blendWas = sceGuGetStatus(GU_BLEND);
+        textureBind(tex);
+        sceGuTexWrap(GU_REPEAT, GU_REPEAT);
+        mobFireOverlayBegin(fireA);
+        for (int i = 0; i < P_COUNT; i++) {
+            sceGumPushMatrix();
+            ScePspFVector3 piv = { parts[i].px, parts[i].py, parts[i].pz };
+            sceGumTranslate(&piv);
+            if (parts[i].zRot != 0.0f) sceGumRotateZ(parts[i].zRot);
+            if (parts[i].yRot != 0.0f) sceGumRotateY(parts[i].yRot);
+            if (parts[i].xRot != 0.0f) sceGumRotateX(parts[i].xRot);
+            mobDrawPartPlain(tall ? g_base64[i] : parts[i].base);
+            if (tall && i >= P_BODY && i <= P_LEG1) mobDrawPartPlain(g_over64[i]);
+            sceGumPopMatrix();
+        }
+        sceGuTexWrap(GU_CLAMP, GU_CLAMP);
+        if (armour) drawArmorLayers(brCol, lit, toWorld, true);
+        mobFireOverlayEnd();
+        if (!blendWas) sceGuDisable(GU_BLEND);
+        sceGuColor(brCol);
+    }
+}
+
+static void drawHeldItem(LocalPlayer* p, int bowStage, unsigned int brCol) {
+    sceGuColor(0xFFFFFFFFu);
+
+    sceGuDisable(GU_BLEND);
+    if (g_haveTerrain) {
+        ItemInstance* held = p->inventory->getSelected();
+        if (held && !held->isNull()) {
+            short id = held->id; unsigned char data = held->data;
+            static ItemModelRenderer model;
+            if (model.build(id, data, bowStage)) {
+                sceGumPushMatrix();
+                ScePspFVector3 ap = { parts[P_ARM0].px, parts[P_ARM0].py, parts[P_ARM0].pz };
+                sceGumTranslate(&ap);
+                if (parts[P_ARM0].zRot != 0.0f) sceGumRotateZ(parts[P_ARM0].zRot);
+                if (parts[P_ARM0].yRot != 0.0f) sceGumRotateY(parts[P_ARM0].yRot);
+                if (parts[P_ARM0].xRot != 0.0f) sceGumRotateX(parts[P_ARM0].xRot);
+                ScePspFVector3 fist = { -1.0f, 7.0f, 1.0f }; sceGumTranslate(&fist);
+                ScePspFVector3 s16  = { 16.0f, 16.0f, 16.0f }; sceGumScale(&s16);
+
+                const bool isFlatItem  = model.isFlat();
+                const bool mirroredPose = isFlatItem &&
+                    (id == ITEM_BOW || (Item::items[id] && Item::items[id]->isHandEquipped()));
+
+                if (!model.isFlat()) {
+                    ScePspFVector3 bo = { 0.0f, 3.0f/16.0f, -5.0f/16.0f }; sceGumTranslate(&bo);
+
+                    sceGumRotateX(20.0f * DEG2RAD); sceGumRotateY(225.0f * DEG2RAD);
+
+                    ScePspFVector3 bs = { 0.375f, -0.375f, 0.375f }; sceGumScale(&bs);
+                    ScePspFVector3 un = { -0.5f, -150.5f, -0.5f }; sceGumTranslate(&un);
+
+                    if (!isCrossShaped(id)) { sceGuEnable(GU_CULL_FACE); sceGuFrontFace(GU_CW); }
+                } else if (id == ITEM_BOW) {
+
+                    ScePspFVector3 bt = { 0.0f, 2.0f/16.0f, 5.0f/16.0f }; sceGumTranslate(&bt);
+                    sceGumRotateY(-20.0f * DEG2RAD);
+                    ScePspFVector3 bsc = { 10.0f/16.0f, -10.0f/16.0f, 10.0f/16.0f }; sceGumScale(&bsc);
+                    sceGumRotateX(-100.0f * DEG2RAD); sceGumRotateY(45.0f * DEG2RAD);
+                    ItemModelRenderer::applyFlatPreTransform();
+                } else if (Item::items[id] && Item::items[id]->isHandEquipped()) {
+
+                    ScePspFVector3 ht = { 0.0f, 3.0f/16.0f, 0.0f }; sceGumTranslate(&ht);
+                    ScePspFVector3 hs = { 10.0f/16.0f, -10.0f/16.0f, 10.0f/16.0f }; sceGumScale(&hs);
+                    sceGumRotateX(-100.0f * DEG2RAD); sceGumRotateY(45.0f * DEG2RAD);
+                    ItemModelRenderer::applyFlatPreTransform();
+                } else {
+
+                    ScePspFVector3 fo = { 4.0f/16.0f, 3.0f/16.0f, -3.0f/16.0f }; sceGumTranslate(&fo);
+                    ScePspFVector3 fs = { 6.0f/16.0f, 6.0f/16.0f, 6.0f/16.0f }; sceGumScale(&fs);
+                    sceGumRotateZ(60.0f * DEG2RAD); sceGumRotateX(-90.0f * DEG2RAD); sceGumRotateZ(20.0f * DEG2RAD);
+                    ItemModelRenderer::applyFlatPreTransform();
+                }
+
+                if (isFlatItem) {
+                    sceGuEnable(GU_CULL_FACE);
+                    sceGuFrontFace(mirroredPose ? GU_CW : GU_CCW);
+                }
+                model.draw(brCol, true);
+
+                sceGuFrontFace(GU_CCW); sceGuDisable(GU_CULL_FACE);
+                sceGumPopMatrix();
+            }
+        }
+    }
+
+    sceGuEnable(GU_BLEND);
+}
+
+static void rotateLikeMobRenderer(LocalPlayer* p, float ibody, float a) {
+    sceGumRotateY((180.0f - ibody) * DEG2RAD);
+    if (p->deathTime > 0) {
+        float fall = sqrtf(((p->deathTime + a - 1.0f) / 20.0f) * 1.6f);
+        if (fall > 1.0f) fall = 1.0f;
+        sceGumRotateZ(fall * 90.0f * DEG2RAD);
+    }
+}
+
+static void drawPlayerModel(LocalPlayer* p, float a, float headYaw, float headPitch,
+                            unsigned int brCol, const float* toWorld) {
+    ScePspFVector3 sc = { -1.0f/16.0f, -1.0f/16.0f, 1.0f/16.0f };  sceGumScale(&sc);
+
+    float gndY = -24.0f + (p->sneaking ? 3.0f : 0.0f);
+    ScePspFVector3 gnd = { 0.0f, gndY, 0.0f };       sceGumTranslate(&gnd);
+
+    int bowStage = posePlayer(p, a, headYaw, headPitch);
+    drawPlayerBody(brCol, true, toWorld);
+    drawHeldItem(p, bowStage, brCol);
+}
+
+static float interpBodyYaw(LocalPlayer* p, float a) {
+    float dBody = p->yBodyRot - p->yBodyRotO; while (dBody > 180.0f) dBody -= 360.0f; while (dBody < -180.0f) dBody += 360.0f;
+    return p->yBodyRotO + dBody * a;
+}
+
+static void beginGuiModel(int x0, int y0, int w, int h) {
+    sceGumMatrixMode(GU_PROJECTION); sceGumPushMatrix(); sceGumLoadIdentity();
+    sceGumOrtho(0.0f, 480.0f, 272.0f, 0.0f, -200.0f, 200.0f);
+    sceGumMatrixMode(GU_VIEW); sceGumPushMatrix(); sceGumLoadIdentity();
+    sceGumMatrixMode(GU_MODEL); sceGumPushMatrix(); sceGumLoadIdentity();
+    sceGuScissor(x0 < 0 ? 0 : x0, y0 < 0 ? 0 : y0, w, h);
+    sceGuClearDepth(0);
+    sceGuClear(GU_DEPTH_BUFFER_BIT);
+    sceGuEnable(GU_DEPTH_TEST);
+}
+static void endGuiModel(bool alphaTest) {
+    if (alphaTest) sceGuEnable(GU_ALPHA_TEST); else sceGuDisable(GU_ALPHA_TEST);
+    sceGuEnable(GU_CULL_FACE);
+    sceGuFrontFace(GU_CW);
+    sceGuDisable(GU_DEPTH_TEST);
+    sceGuScissor(0, 0, 480, 272);
+    sceGumMatrixMode(GU_PROJECTION); sceGumPopMatrix();
+    sceGumMatrixMode(GU_VIEW); sceGumPopMatrix();
+    sceGumMatrixMode(GU_MODEL); sceGumPopMatrix();
+}
+
+void playerModelRender(float a) {
+    LocalPlayer* p = g_level.player;
+    if (!p) return;
+
+    if (p->health <= 0 && p->deathTime >= 20) return;
+    if (!skinTexture()) return;
+    buildParts();
+
+    float ix = p->xo + (p->x - p->xo) * a;
+    float iy = p->yo + (p->y - p->yo) * a;
+    float iz = p->zo + (p->z - p->zo) * a;
+    float iyaw   = p->yRotO + (p->yRot - p->yRotO) * a;
+    float ipitch = p->xRotO + (p->xRot - p->xRotO) * a;
+    float feet   = iy - PLAYER_EYE;
+
+    float ibody = interpBodyYaw(p, a);
+    float dHead = iyaw - ibody; while (dHead > 180.0f) dHead -= 360.0f; while (dHead < -180.0f) dHead += 360.0f;
+
+    unsigned int brCol = playerLightColor(p, ix, iy, iz);
+
+    sceGumMatrixMode(GU_MODEL);
+    sceGumPushMatrix();
+    sceGumLoadIdentity();
+
+    int sdir = 0;
+    float ax = ix, az = iz, af = feet;
+    if (p->isSleeping()) {
+        sdir = worldData(&g_world, p->bedX, p->bedY, p->bedZ) & 3;
+        static const float BOX[4] = {  0.0f, 1.8f,  0.0f, -1.8f };
+        static const float BOZ[4] = { -1.8f, 0.0f,  1.8f,  0.0f };
+        ax += BOX[sdir]; az += BOZ[sdir];
+    }
+    ScePspFVector3 tpos = { ax - g_relBaseX, af - g_relBaseY, az - g_relBaseZ }; sceGumTranslate(&tpos);
+    if (p->isSleeping()) {
+        static const float SLEEP_ROT[4] = { 90.0f, 0.0f, 270.0f, 180.0f };
+
+        sceGumRotateY((180.0f - SLEEP_ROT[sdir]) * DEG2RAD);
+        sceGumRotateZ(-90.0f * DEG2RAD);
+        sceGumRotateY( 90.0f * DEG2RAD);
+    } else {
+        rotateLikeMobRenderer(p, ibody, a);
+    }
+
+    drawPlayerModel(p, a, dHead * DEG2RAD, -ipitch * DEG2RAD, brCol, 0);
+
+    sceGumPopMatrix();
+    sceGuEnable(GU_CULL_FACE);
+
+    renderEntityShadow(ix, feet, iz, 0.0f, 0.5f, 1.0f);
+
+    if (p->isOnFire()) particlesEntityFlame(p);
+}
+
+void playerModelRenderPreview(float sx, float sy, float scale) {
+    if (!skinTexture()) return;
+    buildParts();
+
+    float t = nowSeconds() * 20.0f;
+    float xd = 10.0f * sinf(t * 0.05f);
+    float yd = 10.0f * cosf(t * 0.05f);
+    float headYaw   = atanf(xd / 40.0f) * 20.0f;
+    float headPitch = atanf(yd / 40.0f) * -20.0f;
+
+    float ws = 0.25f;
+    float phase = t * 0.25f * 0.6662f;
+    float tcos0 = cosf(phase) * ws, tcos1 = cosf(phase + PIF) * ws;
+
+    parts[P_HEAD].xRot = headPitch * DEG2RAD; parts[P_HEAD].yRot = headYaw * DEG2RAD; parts[P_HEAD].zRot = 0.0f;
+    parts[P_BODY].xRot = parts[P_BODY].yRot = parts[P_BODY].zRot = 0.0f;
+    parts[P_ARM0].xRot = tcos1; parts[P_ARM0].yRot = parts[P_ARM0].zRot = 0.0f;
+    parts[P_ARM1].xRot = tcos0; parts[P_ARM1].yRot = parts[P_ARM1].zRot = 0.0f;
+    parts[P_LEG0].xRot = tcos0 * 1.4f; parts[P_LEG0].yRot = parts[P_LEG0].zRot = 0.0f;
+    parts[P_LEG1].xRot = tcos1 * 1.4f; parts[P_LEG1].yRot = parts[P_LEG1].zRot = 0.0f;
+
+    float bcos = cosf(t * 0.09f) * 0.05f + 0.05f;
+    float bsin = sinf(t * 0.067f) * 0.05f;
+    parts[P_ARM0].zRot += bcos; parts[P_ARM1].zRot -= bcos;
+    parts[P_ARM0].xRot += bsin; parts[P_ARM1].xRot -= bsin;
+    setPivots(false);
+
+    beginGuiModel((int)(sx - 10.0f * scale), (int)(sy - 10.0f * scale),
+                  (int)(20.0f * scale), (int)(36.0f * scale));
+
+    ScePspFVector3 pos = { sx, sy, 0.0f }; sceGumTranslate(&pos);
+    ScePspFVector3 sc  = { -scale, scale, scale }; sceGumScale(&sc);
+    sceGumRotateY(PIF);
+    drawPlayerBody(0xFFFFFFFFu, false, 0);
+    endGuiModel(false);
+}

@@ -1,0 +1,369 @@
+# One splash per line. Blank lines and lines starting with # are ignored.
+# Minecraft 1.21.9's splashes.txt (Java), minus the lines default8.png has no
+# glyph for and the ones screen_title.cpp's width clamp shrinks below 1.15x --
+# under that the 8px font is sampled at less than a texel per pixel and turns
+# to mush -- the final scale is 150 / the string width in font pixels.
+# The one deliberate exception is the self-referential one; it is the joke.
+# The PSP port's own lines are at the end.
+As seen on TV!
+Awesome!
+100% pure!
+May contain nuts!
+More polygons!
+Moderately attractive!
+Limited edition!
+Flashing letters!
+It's here!
+Best in class!
+It's finished!
+Kind of dragon free!
+Excitement!
+More than 500 sold!
+One of a kind!
+Indev!
+Spiders everywhere!
+Check it out!
+Holy cow, man!
+It's a game!
+Made in Sweden!
+Uses LWJGL!
+Reticulating splines!
+Minecraft!
+Yaaay!
+Singleplayer!
+Keyboard compatible!
+Ingots!
+Exploding creepers!
+That's no moon!
+l33t!
+Create!
+Survive!
+Dungeon!
+Exclusive!
+The bee's knees!
+Closed source!
+Classy!
+Wow!
+Not on steam!
+Oh man!
+Awesome community!
+Pixels!
+Teetsuuuuoooo!
+Kaaneeeedaaaa!
+Now with difficulty!
+Enhanced!
+90% bug free!
+Pretty!
+12 herbs and spices!
+Fat free!
+Absolutely no memes!
+Free dental!
+Ask your doctor!
+Cloud computing!
+Legal in Finland!
+Hard to label!
+Technically good!
+Bringing home the bacon!
+Indie!
+GOTY!
+Euclidian!
+Now in 3D!
+Inspirational!
+Herregud!
+Yes, sir!
+Played by cowboys!
+Thousands of colors!
+Try it!
+Age of Wonders is better!
+Try the mushroom stew!
+Sensational!
+Hot tamale, hot hot tamale!
+Guaranteed!
+Macroscopic!
+Bring it on!
+Random splash!
+Call your mother!
+Monster infighting!
+Loved by millions!
+Ultimate edition!
+Freaky!
+Water proof!
+Uninflammable!
+Whoa, dude!
+All inclusive!
+Tell your friends!
+NP is not in P!
+Music by C418!
+Livestreamed!
+Haunted!
+Polynomial!
+Terrestrial!
+All is full of love!
+Full of stars!
+Scientific!
+Not as cool as Spock!
+Collaborate and listen!
+Never dig down!
+Take frequent breaks!
+Not linear!
+Han shot first!
+Nice to meet you!
+Buckets of lava!
+Ride the pig!
+Larger than Earth!
+sqrt(-1) love you!
+Phobos anomaly!
+Punching wood!
+Falling off cliffs!
+1% sugar!
+150% hyperbole!
+Synecdoche!
+Let's danec!
+Seecret Friday update!
+Reference implementation!
+Kiss the sky!
+20 GOTO 10!
+Verlet integration!
+Peter Griffin!
+Do not distribute!
+Cogito ergo sum!
+A skeleton popped out!
+The sum of its parts!
+BTAF used to be good!
+I miss ADOM!
+umop-apisdn!
+OICU812!
+Bring me Ray Cokes!
+Finger-licking!
+Thematic!
+Pneumatic!
+Sublime!
+Octagonal!
+Une baguette!
+Gargamel plays it!
+Rita is the new top dog!
+SWM forever!
+Representing Edsbyn!
+Matt Damon!
+Consummate V's!
+Cow Tools!
+Double buffered!
+Fan fiction!
+Flaxkikare!
+Jason! Jason! Jason!
+Hotter than the sun!
+Internet enabled!
+Autonomous!
+Engage!
+Fantasy!
+DRR! DRR! DRR!
+Kick it root down!
+Regional resources!
+Woo, facepunch!
+Woo, somethingawful!
+Woo, tigsource!
+Woo, worldofminecraft!
+Woo, reddit!
+Woo, 2pp!
+Google anlyticsed!
+Give us Gordon!
+Tip your waiter!
+Very fun!
+12345 is a bad password!
+Vote for net neutrality!
+MAP11 has two names!
+Omnipotent!
+Gasp!
+...!
+Bees, bees, bees, bees!
+This splash is too small to read on a PSP, but in an emulator it's fine!
+Haha, LOL!
+Hampsterdance!
+Menger sponge!
+idspispopd!
+Eple (original edit)!
+So fresh, so clean!
+Slow acting portals!
+Try the Nether!
+Oh, ok, Pigmen!
+Finally with ladders!
+Scary!
+Twittered about!
+Joel is neat!
+Welcome to your Doom!
+Stay a while and listen!
+Treatment for your rash!
+"Autological" is!
+Lots of truthiness!
+The creeper is a spy!
+Turing complete!
+It's groundbreaking!
+Let our battle's begin!
+The sky is the limit!
+Jeb has amazing hair!
+Casual gaming!
+Undefeated!
+Kinda like Lemmings!
+Follow the train, CJ!
+Leveraging synergy!
+DungeonQuest is unfair!
+90210!
+Check out the far lands!
+Tyrion would love it!
+Also try VVVVVV!
+Also try Super Meat Boy!
+Also try Terraria!
+Also try Mount And Blade!
+Also try Project Zomboid!
+Also try World of Goo!
+Also try Limbo!
+Also try Braid!
+That's super!
+Bread is pain!
+Read more books!
+Khaaaaaaaaan!
+Bigger than a bread box!
+Millions of peaches!
+Fnord!
+This is my true form!
+Pumpkinhead!
+Made by Jeb!
+Has an ending!
+Finally complete!
+Feature packed!
+Boots with the fur!
+Stop, hammertime!
+Testificates!
+Conventional!
+Place ALL the blocks!
+Does barrel rolls!
+Meeting expectations!
+PC gaming since 1873!
+Got your nose!
+Haley loves Elan!
+Doesn't use the U-word!
+Child's play!
+Technologic!
+Funk soul brother!
+Pumpakungen!
+Helo Cymru!
+My life for Aiur!
+Who put it there?
+You can't explain that!
+if not ok then return end
+Big Pointy Teeth!
+Mmmph, mmph!
+Swords for everyone!
+Plz reply to my tweet!
+.party()!
+Take her pillow!
+Put that cookie down!
+Pretty scary!
+I have a suggestion.
+Now with extra hugs!
+Java 16 + 1 + 4 = 21!
+Woah.
+HURNERJSGER?
+What's up, Doc?
+That's Numberwang!
+pls rt
+Throw a blanket over it!
+Now with additional stuff!
+Extra things!
+Now With Multiplayer!
+Rise from your grave!
+Run, coward! I hunger!
+Flavor with no seasoning!
+It swings, it jives!
+Cruising streets for gold!
+/give @a hugs 64
+This is good for Realms.
+Do it all, everything!
+GNU Terry Pratchett
+More Digital!
+doot doot
+Falling with style!
+Boats FTW
+Javalicious edition
+You're going too fast!
+Thank you for the fish!
+All rumors are true!
+Truly gone fishing!
+Rainbow turtle?
+Something funny!
+I need more context.
+Ahhhhhh!
+Don't worry, be happy!
+Water bottle!
+What's the question?
+Plant a tree!
+Go to the dentist!
+What do you expect?
+Look mum, I'm in a splash!
+It came from space.
+Ph1lza had a good run!
+Ping the human!
+Buzzy Bees!
+Wash your hands!
+Soap and water!
+Support local businesses!
+Stay safe!
+Stay strong!
+Don't touch your face!
+Prepare, but don't hoard!
+Shop for your elders!
+Honey, I grew the bees!
+Find your claw!
+Everybody do the Leif!
+<3 Max & 99 & Ducky!
+Bushy eyebrows!
+Edit is a name!
+Music by Lena Raine!
+Aww man!
+And my pickaxe!
+Envision! Create! Share!
+Fabulous graphics!
+Vanilla!
+Zoglin!?
+Black lives matter!
+Be anti-racist!
+Learn about allyship!
+Contains simulated goats!
+Home-made!
+Get to the coppah!
+Made by "real" people!
+Who let the frogs out?
+RIBBIT!
+Croak team!
+Nooooooooooooo!
+Hat Fridays!
+Technoblade never dies!
+You are valid!
+I'm glad you're here!
+You are welcome here!
+Your gender is valid!
+Contains infinite genders!
+Made with lave!
+This sand is sus
+Has working bookshelves!
+Sniff sniff...
+Place hanging sign here
+Joule is neat too!
+Music by Aaron Cherof!
+Music by Kumi Tanioka!
+Music by Amos Roddy!
+Flint and Steel!
+Chicken Jockey!
+
+# --- PSP port ---
+333 MHz of raw power!
+Fits on a Memory Stick!
+No UMD required!
+32 megabytes is plenty!
+Mind the analog nub!
+Also try LameCraft!
+Also try CrossCraft!
+Unsigned by Sony!
+Charge your battery!
+Homebrew!
+Graphics Engine powered!
