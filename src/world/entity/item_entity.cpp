@@ -161,8 +161,9 @@ void ItemEntity::tryPlayerPickup() {
         y >= feet && y <= feet + PLAYER_H) {
 
         if (!g_level.player->inventory->isCreative()) {
-            ItemInstance stack(item);
-            if (!g_level.player->inventory->add(stack)) return;
+            ItemInstance whole(item);
+            if (!g_level.player->inventory->add(item)) return;
+            item = whole;
             g_level.player->inventory->ensureHotbar(item.id, item.data);
         }
 

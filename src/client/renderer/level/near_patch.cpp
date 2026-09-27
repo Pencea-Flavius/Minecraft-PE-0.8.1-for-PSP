@@ -106,7 +106,12 @@ static int  s_stageNextKey = 0;
 static int  s_stagePieceBuf = -1;
 static unsigned int s_stageWorstUs = 0;
 
-static float s_minEdge = 0.0f, s_safePerEdge = 0.0f, s_fov = 0.0f;
+static float s_minEdge = 0.0f, s_safePerEdge = 0.0f;
+static int   s_band = -1;
+
+static const float BAND_LO[2] = { 59.4f, 70.0f };
+static const float BAND_HI[2] = { 70.0f, 77.0f };
+static int fovBand(float fov) { return fov > BAND_HI[0] ? 1 : 0; }
 
 static float s_worldPerPxPerDepth = 0.0f;
 
@@ -522,8 +527,8 @@ void nearPatchReserve(void) { allocAll(); }
 void nearPatchSplitParams(float* minEdge, float* safePerEdge) {
     if (s_safePerEdge > 0.0f) { *minEdge = s_minEdge; *safePerEdge = s_safePerEdge; return; }
 
-    *minEdge     = nearpatch::minEdge(NEAR_PATCH_Z, 60.0f);
-    *safePerEdge = nearpatch::safeDist(1.0f, 70.0f);
+    *minEdge     = nearpatch::minEdge(NEAR_PATCH_Z, BAND_LO[0]);
+    *safePerEdge = nearpatch::safeDist(1.0f, BAND_HI[0]);
 }
 
 bool nearPatchUpdate(const World* w, float ex, float ey, float ez, float fov) {
@@ -532,12 +537,15 @@ bool nearPatchUpdate(const World* w, float ex, float ey, float ez, float fov) {
     s_swappedThisFrame = false;
     s_curEx = ex; s_curEy = ey; s_curEz = ez;
     if (!allocAll()) { s_state = 2; return false; }
-    if (fov != s_fov || s_safePerEdge == 0.0f) {
-        s_fov = fov;
-        s_minEdge     = nearpatch::minEdge(NEAR_PATCH_Z, fov);
-        s_safePerEdge = nearpatch::safeDist(1.0f, fov);
-        s_worldPerPxPerDepth = nearpatch::tanV(fov) / nearpatch::HALF_H_PX;
-        pickNow(w, ex, ey, ez);
+    const int band = fovBand(fov);
+    if (band != s_band || s_safePerEdge == 0.0f) {
+        const bool first = s_safePerEdge == 0.0f;
+        s_band = band;
+        s_minEdge     = nearpatch::minEdge(NEAR_PATCH_Z, BAND_LO[band]);
+        s_safePerEdge = nearpatch::safeDist(1.0f, BAND_HI[band]);
+        s_worldPerPxPerDepth = nearpatch::tanV(BAND_HI[band]) / nearpatch::HALF_H_PX;
+        if (first || !s_built) pickNow(w, ex, ey, ez);
+        else { stageStart(w, ex, ey, ez); stageRun(PICK_BUDGET_US); }
     } else if (!s_built) {
         pickNow(w, ex, ey, ez);
     } else {
@@ -558,8 +566,9 @@ bool nearPatchUpdate(const World* w, float ex, float ey, float ez, float fov) {
             stageRun(PICK_BUDGET_US);
         }
     }
-    s_state = coversFrame() ? 0 : 1;
-    return coversFrame();
+    const bool covers = coversFrame() && fov >= BAND_LO[band];
+    s_state = covers ? 0 : 1;
+    return covers;
 }
 
 void nearPatchRefresh(const World* w) {

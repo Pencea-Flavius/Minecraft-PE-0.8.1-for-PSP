@@ -5,6 +5,7 @@
 #include "world/level/chunk/chunk.h"
 #include "world/level/tile/tile_shapes.h"
 #include "world/difficulty.h"
+#include "world/item/item.h"
 #include "client/gamemode/gamemode.h"
 #include "client/player/player_state.h"
 #include "client/renderer/item_hand.h"
@@ -32,6 +33,18 @@ LocalPlayer::LocalPlayer(Level* level) : Player(level) {
     entityRendererId = ER_DEFAULT_RENDERER;
 }
 
+float LocalPlayer::getFieldOfViewModifier() {
+    float targetFov = 1.0f;
+    if (flying) targetFov *= 1.1f;
+    if (isUsingItem() && getUseItem()->id == ITEM_BOW) {
+        float scale = (float)getTicksUsingItem() / 20.0f;
+        if (scale > 1.0f) scale = 1.0f;
+        else              scale *= scale;
+        targetFov *= 1.0f - scale * 0.15f;
+    }
+    return targetFov;
+}
+
 void LocalPlayer::aiStep(unsigned int btn, unsigned char lx, unsigned char ly,
                          unsigned char rx, unsigned char ry) {
     const float LOOK = 7.5f * g_sensitivity;
@@ -53,6 +66,8 @@ void LocalPlayer::aiStep(unsigned int btn, unsigned char lx, unsigned char ly,
 
     xo = x; yo = y; zo = z;
     yRotO = yRot; xRotO = xRot;
+    fovModO = fovMod;
+    fovMod += (getFieldOfViewModifier() - fovMod) * 0.5f;
 
     if (attackTime > 0)       attackTime--;
     if (hurtTime > 0)         hurtTime--;

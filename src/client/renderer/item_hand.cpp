@@ -505,10 +505,6 @@ void itemHandDraw(float a, float bs, float bc) {
     sceGumMatrixMode(GU_MODEL);
     sceGumLoadIdentity();
 
-    if (hasItem && id == ITEM_BOW) {
-        ScePspFVector3 back = { 0.0f, 0.0f, -0.1f };
-        sceGumTranslate(&back);
-    }
 
     if (g_viewBobbing) {
         float wda = g_level.player->walkDist - g_level.player->walkDistO;

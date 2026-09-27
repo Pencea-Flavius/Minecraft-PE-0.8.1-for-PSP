@@ -21,6 +21,9 @@ public:
 
     int autoJumpTime = 0;
 
+    float getFieldOfViewModifier();
+    float fovMod = 1.0f, fovModO = 1.0f;
+
     virtual void die(Entity* source);
 
     virtual void doWaterSplashEffect();

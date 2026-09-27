@@ -4,6 +4,7 @@
 #include "world/entity/local_player.h"
 #include "client/renderer/item_hand.h"
 #include "gpu/spawn_egg_colors.h"
+#include "gpu/item_icons.h"
 #include "client/renderer/item_model.h"
 #include "world/entity/item_entity.h"
 #include "world/item/item.h"
@@ -101,6 +102,21 @@ void ItemRenderer::render(Entity* entity, float x, float y, float z, float , flo
             { u0, v1, c, 0 - xo, 0 - yo, 0.0f },
         };
 
+        ChunkVertex q2[6];
+        const bool egg = (id == ITEM_SPAWN_EGG);
+        if (egg) {
+            unsigned int eggBase, eggSpot;
+            spawnEggColors(data, &eggBase, &eggSpot);
+            const unsigned int light = dropLight(x, y, z);
+            const float du = (II_SPAWN_EGG_OVERLAY - II_SPAWN_EGG_BASE) * 16.0f / 512.0f;
+            for (int k = 0; k < 6; ++k) {
+                q[k].color = eggMul(light, eggBase);
+                q2[k] = q[k];
+                q2[k].u += du;
+                q2[k].color = eggMul(light, eggSpot);
+            }
+        }
+
         sceGumMatrixMode(GU_MODEL);
         sceGumPushMatrix();
         sceGumLoadIdentity();
@@ -123,6 +139,7 @@ void ItemRenderer::render(Entity* entity, float x, float y, float z, float , flo
 
             sceGumRotateY(bill);
             ItemModelRenderer::drawMesh(q, 6, 0xFFFFFFFFu, tex, true);
+            if (egg) ItemModelRenderer::drawMesh(q2, 6, 0xFFFFFFFFu, tex, true);
             sceGumPopMatrix();
         }
         sceGumPopMatrix();

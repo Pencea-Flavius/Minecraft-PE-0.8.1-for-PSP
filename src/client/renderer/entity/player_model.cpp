@@ -404,12 +404,12 @@ static void drawHeldItem(LocalPlayer* p, int bowStage, unsigned int brCol) {
                 if (!model.isFlat()) {
                     ScePspFVector3 bo = { 0.0f, 3.0f/16.0f, -5.0f/16.0f }; sceGumTranslate(&bo);
 
-                    sceGumRotateX(20.0f * DEG2RAD); sceGumRotateY(225.0f * DEG2RAD);
+                    sceGumRotateX(200.0f * DEG2RAD); sceGumRotateY(45.0f * DEG2RAD);
 
-                    ScePspFVector3 bs = { 0.375f, -0.375f, 0.375f }; sceGumScale(&bs);
+                    ScePspFVector3 bs = { 0.375f, 0.375f, 0.375f }; sceGumScale(&bs);
                     ScePspFVector3 un = { -0.5f, -150.5f, -0.5f }; sceGumTranslate(&un);
 
-                    if (!isCrossShaped(id)) { sceGuEnable(GU_CULL_FACE); sceGuFrontFace(GU_CW); }
+                    if (!isCrossShaped(id)) { sceGuEnable(GU_CULL_FACE); sceGuFrontFace(GU_CCW); }
                 } else if (id == ITEM_BOW) {
 
                     ScePspFVector3 bt = { 0.0f, 2.0f/16.0f, 5.0f/16.0f }; sceGumTranslate(&bt);

@@ -1632,7 +1632,7 @@ void gameRender(MenuState& s) {
     if (thirdNow) {
         const float baseCamX = nearOx, baseCamY = nearOy, baseCamZ = nearOz;
 
-        const float CLEAR = 0.18f;
+        const float CLEAR = 0.22f;
         for (int iter = 0; iter < 3; iter++) {
             bool moved = false;
             int cbx = (int)floorf(nearOx), cby = (int)floorf(nearOy), cbz = (int)floorf(nearOz);
@@ -1688,7 +1688,16 @@ void gameRender(MenuState& s) {
             eyeBlk = worldBlock(&g_world, camBx, camBy + 1, camBz);
     }
 
-    float fov = isWaterId(eyeBlk) ? 60.0f : 70.0f;
+    float fov = 70.0f;
+    {
+        LocalPlayer* p = g_level.player;
+        fov *= p->fovModO + (p->fovMod - p->fovModO) * a;
+        if (isWaterId(eyeBlk)) fov = 60.0f;
+        if (p->health <= 0) {
+            float duration = p->deathTime + a;
+            fov /= (1.0f - 500.0f / (duration + 500.0f)) * 2.0f + 1.0f;
+        }
+    }
 
     s_eyeBlk = eyeBlk;
 
