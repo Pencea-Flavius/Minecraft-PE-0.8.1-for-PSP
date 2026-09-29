@@ -118,10 +118,28 @@ void quitToMenuNoSave(MenuState& s) {
 
     soundStopAll();
 
+    char activeDir[320] = {0};
+    const char* act = LevelStorage::getActiveDir();
+    if (act && act[0]) {
+        strncpy(activeDir, act, sizeof(activeDir) - 1);
+    }
+
     releaseWorldAndPlayer();
 
     worldListScan(&s.worlds);
-    s.worldSelected = 0;
+    int sel = 0;
+    if (activeDir[0]) {
+        const char* slash = strrchr(activeDir, '/');
+        const char* base = slash ? slash + 1 : activeDir;
+        for (int i = 0; i < s.worlds.count; i++) {
+            if (strcmp(s.worlds.names[i], base) == 0) {
+                sel = i;
+                break;
+            }
+        }
+    }
+    s.worldSelected = sel;
+    LevelStorage::setActiveWorld(0, 0, 0, 0, 0);
 
     panoramaLoadAll();
     s.screen = SCREEN_WORLDS;

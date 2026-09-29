@@ -319,6 +319,53 @@ static inline bool isNoMipLayerId(unsigned char id) {
         || id == BLOCK_CACTUS || isGlass(id) || id == BLOCK_CAKE;
 }
 
+static inline bool isLeafSolidBlock(unsigned char b) {
+    return isLeaf(b) || isOpaque(b);
+}
+
+static inline unsigned char getBlock18(const World* w, const unsigned char* lc,
+                                       int ox, int oz, int y0, int y1,
+                                       int gx, int gy, int gz,
+                                       int cx, int cy, int cz) {
+    if ((unsigned int)cx < 18u && (unsigned int)cz < 18u && (unsigned int)cy < 18u) {
+        return lc[(cx * 18 + cz) * 18 + cy];
+    }
+    return worldBlock(w, gx, gy, gz);
+}
+
+static inline bool isLeafWrappedAt(const World* w, const unsigned char* lc,
+                                   int ox, int oz, int y0, int y1,
+                                   int x, int y, int z, int cx, int cy, int cz, int idx) {
+    if (cy > 0 && cy < 17 && cx > 0 && cx < 17 && cz > 0 && cz < 17) {
+        return isLeafSolidBlock(lc[idx - 1]) &&
+               isLeafSolidBlock(lc[idx + 1]) &&
+               isLeafSolidBlock(lc[idx - 18 * 18]) &&
+               isLeafSolidBlock(lc[idx + 18 * 18]) &&
+               isLeafSolidBlock(lc[idx - 18]) &&
+               isLeafSolidBlock(lc[idx + 18]);
+    }
+
+    if (!isLeafSolidBlock(getBlock18(w, lc, ox, oz, y0, y1, x, y - 1, z, cx, cy - 1, cz))) return false;
+    if (!isLeafSolidBlock(getBlock18(w, lc, ox, oz, y0, y1, x, y + 1, z, cx, cy + 1, cz))) return false;
+    if (!isLeafSolidBlock(getBlock18(w, lc, ox, oz, y0, y1, x - 1, y, z, cx - 1, cy, cz))) return false;
+    if (!isLeafSolidBlock(getBlock18(w, lc, ox, oz, y0, y1, x + 1, y, z, cx + 1, cy, cz))) return false;
+    if (!isLeafSolidBlock(getBlock18(w, lc, ox, oz, y0, y1, x, y, z - 1, cx, cy, cz - 1))) return false;
+    if (!isLeafSolidBlock(getBlock18(w, lc, ox, oz, y0, y1, x, y, z + 1, cx, cy, cz + 1))) return false;
+    return true;
+}
+
+static inline bool isSolidRenderTile(const World* w, const unsigned char* lc,
+                                     int ox, int oz, int y0, int y1,
+                                     int x, int y, int z, int cx, int cy, int cz, int idx,
+                                     unsigned char id, bool leavesOpaque) {
+    if (isOpaque(id)) return true;
+    if (isLeaf(id)) {
+        if (leavesOpaque) return true;
+        return isLeafWrappedAt(w, lc, ox, oz, y0, y1, x, y, z, cx, cy, cz, idx);
+    }
+    return false;
+}
+
 bool sectionCannotEmit(const World* w, int ox, int oz, int si) {
 
     if (!worldReady(w, ox, oz)) return false;
@@ -531,6 +578,11 @@ int meshPass(const World* w, int ox, int oz, int y0, int y1, ChunkVertex* out, i
 
         if (layer == 3 && !noMipCube) continue;
 
+        bool leaf = isLeaf(id);
+        int cx = lx + 1, cy = y - y0 + 1, cz = lz + 1;
+        int base = (cx * 18 + cz) * 18 + cy;
+        bool idWrapped = leaf && (!leavesOpaque) && isLeafWrappedAt(w, lc, ox, oz, y0, y1, gx, y, gz, cx, cy, cz, base);
+
         if (out && n + 36 > cap) return -1;
 
         int blockData = -1;
@@ -540,13 +592,24 @@ int meshPass(const World* w, int ox, int oz, int y0, int y1, ChunkVertex* out, i
             int nx = gx + kFaceNeighbor[f][0];
             int ny = y  + kFaceNeighbor[f][1];
             int nz = gz + kFaceNeighbor[f][2];
-            unsigned char nb = LCB(nx, ny, nz);
+            int ncx = cx + kFaceNeighbor[f][0];
+            int ncy = cy + kFaceNeighbor[f][1];
+            int ncz = cz + kFaceNeighbor[f][2];
+            int nbi = (ncx * 18 + ncz) * 18 + ncy;
+            unsigned char nb = lc[nbi];
 
-            bool hide = isOpaque(nb);
+            bool hide = isSolidRenderTile(w, lc, ox, oz, y0, y1, nx, ny, nz, ncx, ncy, ncz, nbi, nb, leavesOpaque);
             if (id == BLOCK_TOPSNOW && f == F_TOP) hide = false;
             if (nb == BLOCK_TOPSNOW && f == F_TOP) hide = true;
 
-            if (hide || (isLeaf(id) && isLeaf(nb) && (leavesOpaque || leavesCull)) ||
+            bool leafLeafCull = false;
+            if (leaf && isLeaf(nb)) {
+                if (!idWrapped && !hide) {
+                    leafLeafCull = (leavesOpaque || leavesCull);
+                }
+            }
+
+            if (hide || leafLeafCull ||
                 (id == BLOCK_TOPSNOW && nb == BLOCK_TOPSNOW) ||
                 (id == BLOCK_CACTUS && nb == BLOCK_CACTUS) ||
                 (id == BLOCK_GLASS && nb == BLOCK_GLASS) ||
@@ -560,7 +623,7 @@ int meshPass(const World* w, int ox, int oz, int y0, int y1, ChunkVertex* out, i
                     if (f != F_TOP && f != F_DOWN) { col = 4; row = 4; tint = 0xFFFFFFFFu; }
                 }
 
-                if (layer == 2 && leavesOpaque) col += 1;
+                if (layer == 2 && (leavesOpaque || idWrapped)) col += 1;
                 float u0 = col * TILE_UV, v0 = row * TILE_UV;
 
                 unsigned int cc[2][2];
@@ -788,6 +851,8 @@ int meshSectionSink(const World* w, int ox, int oz, int y0, int y1,
         }
 
         bool leaf = isLeaf(id);
+        int cx = lx + 1, cy = y - y0 + 1, cz = lz + 1;
+        bool idWrapped = leaf && (!leavesOpaque) && isLeafWrappedAt(w, lc, ox, oz, y0, y1, gx, y, gz, cx, cy, cz, base);
         bool leafTransparent = leaf && !leavesOpaque;
         bool leafOpaqueDst = leaf && !leafTransparent;
         bool noMip = (id == BLOCK_CACTUS) || isGlass(id) || leafTransparent;
@@ -808,12 +873,25 @@ int meshSectionSink(const World* w, int ox, int oz, int y0, int y1,
         for (int f = 0; f < 6; f++) {
             int nbi = base + kFaceStride[f];
             unsigned char nb = lc[nbi];
+            int nx = gx + kFaceNeighbor[f][0];
+            int ny = y  + kFaceNeighbor[f][1];
+            int nz = gz + kFaceNeighbor[f][2];
+            int ncx = cx + kFaceNeighbor[f][0];
+            int ncy = cy + kFaceNeighbor[f][1];
+            int ncz = cz + kFaceNeighbor[f][2];
 
-            bool hide = isOpaque(nb);
+            bool hide = isSolidRenderTile(w, lc, ox, oz, y0, y1, nx, ny, nz, ncx, ncy, ncz, nbi, nb, leavesOpaque);
             if (id == BLOCK_TOPSNOW && f == F_TOP) hide = false;
             if (nb == BLOCK_TOPSNOW && f == F_TOP) hide = true;
 
-            if (hide || (isLeaf(id) && isLeaf(nb) && (leavesOpaque || leavesCull)) ||
+            bool leafLeafCull = false;
+            if (leaf && isLeaf(nb)) {
+                if (!idWrapped && !hide) {
+                    leafLeafCull = (leavesOpaque || leavesCull);
+                }
+            }
+
+            if (hide || leafLeafCull ||
                 (id == BLOCK_TOPSNOW && nb == BLOCK_TOPSNOW) ||
                 (id == BLOCK_CACTUS && nb == BLOCK_CACTUS) ||
                 (id == BLOCK_GLASS && nb == BLOCK_GLASS) ||
@@ -825,7 +903,7 @@ int meshSectionSink(const World* w, int ox, int oz, int y0, int y1,
                 if (f != F_TOP && f != F_DOWN) { col = 4; row = 4; tint = 0xFFFFFFFFu; }
             }
 
-            if (leafOpaqueDst) col += 1;
+            if (leafOpaqueDst || (leaf && idWrapped)) col += 1;
             float u0 = col * TILE_UV, v0 = row * TILE_UV;
 
             unsigned int cc[2][2];

@@ -7,14 +7,22 @@
 
 #include <pspiofilemgr.h>
 #include <psprtc.h>
+#include <pspkernel.h>
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
 
 long worldSeedFromString(const char* str) {
-    if (!str || str[0] == '\0')
-        return (long)time(NULL);
+    if (!str || str[0] == '\0') {
+        unsigned int t = (unsigned int)time(NULL);
+        if (t == 0 || t == (unsigned int)-1) {
+            t = sceKernelGetSystemTimeLow();
+        } else {
+            t = t * 2654435761u + sceKernelGetSystemTimeLow();
+        }
+        return (long)(int)t;
+    }
 
     const char* p = str;
     if (*p == '-' || *p == '+') p++;
@@ -122,7 +130,7 @@ void worldListScan(WorldList* out) {
     }
     sceIoDclose(d);
 
-    long keys[MCPSP_MAX_WORLDS];
+    unsigned long long keys[MCPSP_MAX_WORLDS];
     for (int i = 0; i < out->count; i++) {
         keys[i] = 0;
         SceIoStat st;
@@ -135,8 +143,9 @@ void worldListScan(WorldList* out) {
         }
         if (ok) {
             ScePspDateTime* t = &st.sce_st_mtime;
-            keys[i] = ((((long)t->year * 12 + t->month) * 31 + t->day) * 24 + t->hour) * 3600
-                      + t->minute * 60 + t->second;
+            unsigned long long yr = (t->year < 1980) ? 1980ull : (unsigned long long)t->year;
+            keys[i] = ((((yr * 12ull + t->month) * 31ull + t->day) * 24ull + t->hour) * 3600ull
+                      + t->minute * 60ull + t->second) + 1ull;
             ScePspDateTime cur;
             u64 then = 0, now = 0;
             if (sceRtcGetCurrentClockLocalTime(&cur) >= 0 &&
@@ -147,7 +156,7 @@ void worldListScan(WorldList* out) {
     }
     for (int i = 1; i < out->count; i++)
         for (int j = i; j > 0 && keys[j] > keys[j - 1]; j--) {
-            long k = keys[j]; keys[j] = keys[j - 1]; keys[j - 1] = k;
+            unsigned long long k = keys[j]; keys[j] = keys[j - 1]; keys[j - 1] = k;
             char tmp[64];
             memcpy(tmp, out->names[j], 64);        memcpy(out->names[j], out->names[j - 1], 64);               memcpy(out->names[j - 1], tmp, 64);
             memcpy(tmp, out->displayNames[j], 64); memcpy(out->displayNames[j], out->displayNames[j - 1], 64); memcpy(out->displayNames[j - 1], tmp, 64);
@@ -190,6 +199,14 @@ bool worldListCreate(WorldList* list, const char* inName, char* outName, int gam
             if (strcmp(list->names[i], candidate) == 0) {
                 taken = true;
                 break;
+            }
+        }
+        if (!taken) {
+            char chk[320];
+            snprintf(chk, sizeof(chk), "saves/%s", candidate);
+            SceIoStat st;
+            if (sceIoGetstat(savePath(chk), &st) >= 0) {
+                taken = true;
             }
         }
         if (!taken)
