@@ -26,8 +26,9 @@ static inline void decode(const DrawVertex& d, const int origin[3], float oversc
     o.lx = d.x; o.ly = d.y; o.lz = d.z;
     o.u = d.u / 32767.0f;
     o.v = d.v / 32767.0f;
-    o.r = d.color & 0xFF;         o.g = (d.color >> 8) & 0xFF;
-    o.b = (d.color >> 16) & 0xFF; o.a = (d.color >> 24) & 0xFF;
+    const unsigned int c = color5650To8888(d.color);
+    o.r = c & 0xFF;         o.g = (c >> 8) & 0xFF;
+    o.b = (c >> 16) & 0xFF; o.a = (c >> 24) & 0xFF;
 }
 
 struct Out { PieceVertex* out; int n, cap; bool full; };

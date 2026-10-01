@@ -31,7 +31,8 @@ static ChunkVertex* g_scratch = 0;
 static ChunkVertex* g_tile[4] = { 0, 0, 0, 0 };
 
 static DrawVertex* g_stage[4] = { 0, 0, 0, 0 };
-static int stageVerts(int L) { return L == 0 ? SCRATCH_VERTS : SCRATCH_VERTS_WL; }
+static int stageTriVerts(int L) { return L == 0 ? SCRATCH_VERTS : SCRATCH_VERTS_WL; }
+static int stageVerts(int L) { return quadVerts(stageTriVerts(L)); }
 
 static bool tileAlloc() {
     if (!g_tile[0]) {
@@ -64,8 +65,8 @@ static bool tileFlush(MeshSink* sk, int layer) {
     int n = sk->n[layer];
     if (!n) return true;
 
-    if (sk->total[layer] + n > stageVerts(layer)) return false;
-    chunkPackInto(g_stage[layer] + sk->total[layer], sk->buf[layer], n,
+    if (sk->total[layer] + n > stageTriVerts(layer)) return false;
+    chunkPackInto(g_stage[layer] + quadVerts(sk->total[layer]), sk->buf[layer], n,
                   tc->ox, tc->oy, tc->oz, tc->qlo + layer, tc->qhi + layer);
     sk->total[layer] += n;
     sk->n[layer] = 0;
@@ -75,11 +76,13 @@ static bool tileFlush(MeshSink* sk, int layer) {
 static bool g_heapOk = true;
 
 static bool meshHeapReserveProbe() {
-    unsigned MESH_HEAP_RESERVE = g_lowMemHeap ? (1u * 1024 * 1024) : (3u * 1024 * 1024);
-    void* p = malloc(MESH_HEAP_RESERVE);
-    if (!p) return false;
-    free(p);
-    return true;
+    const unsigned MESH_HEAP_RESERVE = g_lowMemHeap ? (1u * 1024 * 1024) : (3u * 1024 * 1024);
+    enum { PIECES = 16 };
+    void* p[PIECES];
+    int got = 0;
+    while (got < PIECES && (p[got] = malloc(MESH_HEAP_RESERVE / PIECES)) != 0) got++;
+    for (int i = 0; i < got; i++) free(p[i]);
+    return got == PIECES;
 }
 
 void chunkMeshHeapProbe() { g_heapOk = meshHeapReserveProbe(); }
@@ -225,10 +228,10 @@ void chunkBuildSection(ChunkMesh* c, const World* w, int si) {
             int n0 = sinkCount(&sk, 0), n1 = sinkCount(&sk, 1);
             int n2 = sinkCount(&sk, 2), n3 = sinkCount(&sk, 3);
             profBegin(PROF_MPACK);
-            s->mesh   = n0 ? chunkPackFinish(g_stage[0], n0) : 0; s->vertexCount = s->mesh   ? n0 : 0;
-            s->water  = n1 ? chunkPackFinish(g_stage[1], n1) : 0; s->waterCount  = s->water  ? n1 : 0;
-            s->leaves = n2 ? chunkPackFinish(g_stage[2], n2) : 0; s->leavesCount = s->leaves ? n2 : 0;
-            s->noMip  = n3 ? chunkPackFinish(g_stage[3], n3) : 0; s->noMipCount  = s->noMip  ? n3 : 0;
+            s->mesh   = n0 ? chunkPackFinish(g_stage[0], quadVerts(n0)) : 0; s->vertexCount = s->mesh   ? n0 : 0;
+            s->water  = n1 ? chunkPackFinish(g_stage[1], quadVerts(n1)) : 0; s->waterCount  = s->water  ? n1 : 0;
+            s->leaves = n2 ? chunkPackFinish(g_stage[2], quadVerts(n2)) : 0; s->leavesCount = s->leaves ? n2 : 0;
+            s->noMip  = n3 ? chunkPackFinish(g_stage[3], quadVerts(n3)) : 0; s->noMipCount  = s->noMip  ? n3 : 0;
             s->noMipLavaStart = s->noMip ? nLava : 0;
             profEnd(PROF_MPACK);
             for (int L = 0; L < 4; L++)

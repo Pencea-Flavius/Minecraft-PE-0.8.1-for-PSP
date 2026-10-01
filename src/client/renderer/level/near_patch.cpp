@@ -213,10 +213,10 @@ static void forTriangles(const PickSet& ps, int k, int range, bool all, Fn fn) {
     const int pad = (int)(SOURCE_EDGE * inv) + 1;
     const int n = end - (end - first) % 3;
     for (int i = first; i < n; i += 3) {
-        const DrawVertex& A = vb[i];
+        const DrawVertex& A = chunkTriVert(vb, i);
         if (!all && (A.x < lx0 - pad || A.x > lx1 + pad || A.z < lz0 - pad || A.z > lz1 + pad ||
                      A.y < ly0 - pad || A.y > ly1 + pad)) continue;
-        const DrawVertex& B = vb[i + 1], &C = vb[i + 2];
+        const DrawVertex& B = chunkTriVert(vb, i + 1), &C = chunkTriVert(vb, i + 2);
         const bool inReach =
             !(min3(A.x, B.x, C.x) > lx1 || max3(A.x, B.x, C.x) < lx0 ||
               min3(A.z, B.z, C.z) > lz1 || max3(A.z, B.z, C.z) < lz0 ||
@@ -403,7 +403,7 @@ static void stageStepKey(int k) {
             float grow[3];
             const PV* q[3] = { &a, &b, &cc };
             for (int v = 0; v < 3; v++) {
-                decode(vb[i + v], ps.origin[k], SEAM_OVERSCALE_OPAQUE, p[v]);
+                decode(chunkTriVert(vb, i + v), ps.origin[k], SEAM_OVERSCALE_OPAQUE, p[v]);
                 turnXZ(p[v].x, p[v].z, ps.origin[k], ps.quarter[k]);
 
                 const float dx = q[v]->x - ps.ex, dy = q[v]->y - ps.ey, dz = q[v]->z - ps.ez;

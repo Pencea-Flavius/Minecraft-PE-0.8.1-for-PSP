@@ -10,7 +10,7 @@
 
 void Tile::popResource(int x, int y, int z, const ItemInstance& item) {
 
-    if (!Entity::hasFreeSlot()) return;
+    if (!g_level.makeEntitySlot()) return;
     const float s = 0.7f;
     float xo = (rand() / (float)RAND_MAX) * s + (1 - s) * 0.5f;
     float yo = (rand() / (float)RAND_MAX) * s + (1 - s) * 0.5f;

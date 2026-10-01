@@ -12,14 +12,18 @@
 
 void chunkPackInto(DrawVertex* d, const ChunkVertex* s, int n,
                    int ox, int oy, int oz, int* qlo, int* qhi) {
-    profAdd(PROFC_PACKVERTS, n);
+    profAdd(PROFC_PACKVERTS, quadVerts(n));
     profBegin(PROF_MCONV);
     int lo = *qlo, hi = *qhi;
-    for (int i = 0; i < n; i++) {
-        d[i].u = uvQ(s[i].u); d[i].v = uvQ(s[i].v); d[i].color = s[i].color;
-        d[i].x = posQ(s[i].x - ox); d[i].y = posQ(s[i].y - oy); d[i].z = posQ(s[i].z - oz); d[i].w = 0;
-        if (d[i].y < lo) lo = d[i].y;
-        if (d[i].y > hi) hi = d[i].y;
+    static const unsigned char kCorner[4] = { 0, 1, 2, 4 };
+    for (int g = 0; g < n; g += 6) {
+        for (int k = 0; k < 4; k++, d++) {
+            const ChunkVertex& v = s[g + kCorner[k]];
+            d->u = uvQ(v.u); d->v = uvQ(v.v); d->color = color8888To5650(v.color);
+            d->x = posQ(v.x - ox); d->y = posQ(v.y - oy); d->z = posQ(v.z - oz);
+            if (d->y < lo) lo = d->y;
+            if (d->y > hi) hi = d->y;
+        }
     }
     *qlo = lo; *qhi = hi;
     profEnd(PROF_MCONV);
@@ -41,14 +45,14 @@ DrawVertex* chunkPackFinish(const DrawVertex* staging, int n) {
 DrawVertex* chunkPack(const ChunkVertex* s, int n, int ox, int oy, int oz,
                       float* ylo, float* yhi) {
     profBegin(PROF_MALLOC);
-    DrawVertex* d = (DrawVertex*)memalign(64, (size_t)n * sizeof(DrawVertex));
+    DrawVertex* d = (DrawVertex*)memalign(64, (size_t)quadVerts(n) * sizeof(DrawVertex));
     profEnd(PROF_MALLOC);
     if (!d) return 0;
     int qlo = 32767, qhi = -32768;
     chunkPackInto(d, s, n, ox, oy, oz, &qlo, &qhi);
     if (ylo) *ylo = chunkPackDecodeY(qlo, oy);
     if (yhi) *yhi = chunkPackDecodeY(qhi, oy);
-    dcacheFlush(d, (size_t)n * sizeof(DrawVertex));
+    dcacheFlush(d, (size_t)quadVerts(n) * sizeof(DrawVertex));
     return d;
 }
 
@@ -84,28 +88,44 @@ void chunkSetModelOrigin(int ox, int oy, int oz, float scaleMul) {
     chunkSetModelAt(ox, oy, oz, scaleMul);
 }
 
+enum { QUAD_BATCH = 2048 };
+static unsigned short s_quadIdx[QUAD_BATCH * 6] __attribute__((aligned(64)));
+
+static void chunkDrawQuads(const DrawVertex* vb, int first, int count) {
+    static bool built = false;
+    if (!built) {
+        static const unsigned char k[6] = { 0, 1, 2, 2, 3, 0 };
+        for (int i = 0; i < QUAD_BATCH * 6; i++) s_quadIdx[i] = (unsigned short)(i / 6 * 4 + k[i % 6]);
+        dcacheFlush(s_quadIdx, sizeof(s_quadIdx));
+        built = true;
+    }
+    const unsigned int fmt = GU_TEXTURE_16BIT | GU_COLOR_5650 | GU_VERTEX_16BIT | GU_TRANSFORM_3D | GU_INDEX_16BIT;
+    vb += quadVerts(first);
+    while (count > 0) {
+        const int idx = count < QUAD_BATCH * 6 ? count : QUAD_BATCH * 6;
+        sceGumDrawArray(GU_TRIANGLES, fmt, idx, s_quadIdx, vb);
+        vb += QUAD_BATCH * 4;
+        count -= idx;
+    }
+}
+
 void chunkDrawSection(const ChunkSection* s) {
     if (s->vertexCount <= 0 || !s->mesh) return;
     chunkSetModel(s, SEAM_OVERSCALE_OPAQUE);
-    const unsigned int fmt = GU_TEXTURE_16BIT | GU_COLOR_8888 | GU_VERTEX_16BIT | GU_TRANSFORM_3D;
-    sceGumDrawArray(GU_TRIANGLES, fmt, s->vertexCount, 0, s->mesh);
+    chunkDrawQuads(s->mesh, 0, s->vertexCount);
 }
 
 void chunkDrawWaterSection(const ChunkSection* s) {
     if (s->waterCount > 0 && s->water) {
         chunkSetModel(s, SEAM_OVERSCALE_TRANS);
-        sceGumDrawArray(GU_TRIANGLES,
-                        GU_TEXTURE_16BIT | GU_COLOR_8888 | GU_VERTEX_16BIT | GU_TRANSFORM_3D,
-                        s->waterCount, 0, s->water);
+        chunkDrawQuads(s->water, 0, s->waterCount);
     }
 }
 
 void chunkDrawLeavesSection(const ChunkSection* s) {
     if (s->leavesCount > 0 && s->leaves) {
         chunkSetModel(s, SEAM_OVERSCALE_OPAQUE);
-        sceGumDrawArray(GU_TRIANGLES,
-                        GU_TEXTURE_16BIT | GU_COLOR_8888 | GU_VERTEX_16BIT | GU_TRANSFORM_3D,
-                        s->leavesCount, 0, s->leaves);
+        chunkDrawQuads(s->leaves, 0, s->leavesCount);
     }
 }
 
@@ -117,9 +137,7 @@ void chunkDrawNoMipSection(const ChunkSection* s, int part) {
     else if (part == NOMIP_LAVA) { first = s->noMipLavaStart; count = s->noMipCount - first; }
     if (count <= 0) return;
     chunkSetModel(s, SEAM_OVERSCALE_OPAQUE);
-    sceGumDrawArray(GU_TRIANGLES,
-                    GU_TEXTURE_16BIT | GU_COLOR_8888 | GU_VERTEX_16BIT | GU_TRANSFORM_3D,
-                    count, 0, s->noMip + first);
+    chunkDrawQuads(s->noMip, first, count);
 }
 
 void chunkFreeMesh(ChunkMesh* c) {

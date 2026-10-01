@@ -22,7 +22,7 @@ public:
     Entity(Level* level);
     virtual ~Entity();
 
-    static const int ENTITY_POOL = 96;
+    static const int ENTITY_POOL = 128;
 
     static const unsigned ENTITY_SLOT = 2688;
     static bool  hasFreeSlot();

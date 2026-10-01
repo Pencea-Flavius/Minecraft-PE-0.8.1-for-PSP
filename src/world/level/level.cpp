@@ -341,6 +341,7 @@ void Level::tickEntities() {
 
     if ((w->time % 400) < 2) MobSpawner::tick(this, false, true);
 
+    tickingEntities = true;
     for (size_t i = 0; i < entities.size(); i++) {
         Entity* e = entities[i];
 
@@ -351,6 +352,7 @@ void Level::tickEntities() {
             relinkIfMoved(e);
         }
     }
+    tickingEntities = false;
 
     for (size_t i = 0; i < entities.size(); ) {
         if (entities[i]->removed) {
@@ -366,6 +368,27 @@ void Level::tickEntities() {
             i++;
         }
     }
+}
+
+bool Level::makeEntitySlot() {
+    if (Entity::hasFreeSlot()) return true;
+    if (tickingEntities) return false;
+    const float px = player ? player->x : 0.0f, pz = player ? player->z : 0.0f;
+    int best = -1, bestRank = 0;
+    float bestD2 = -1.0f;
+    for (size_t i = 0; i < entities.size(); i++) {
+        Entity* e = entities[i];
+        if (e == player || e->removed || e->rider || e->riding || !e->isItemEntity()) continue;
+        const int rank = isLoadedAt(e->x, e->z) ? 1 : 2;
+        const float dx = e->x - px, dz = e->z - pz, d2 = dx * dx + dz * dz;
+        if (rank > bestRank || (rank == bestRank && d2 > bestD2)) { best = (int)i; bestRank = rank; bestD2 = d2; }
+    }
+    if (best < 0) return false;
+    unlinkEntity(entities[best]);
+    delete entities[best];
+    entities[best] = entities.back();
+    entities.pop_back();
+    return Entity::hasFreeSlot();
 }
 
 void Level::removeAllEntities() {

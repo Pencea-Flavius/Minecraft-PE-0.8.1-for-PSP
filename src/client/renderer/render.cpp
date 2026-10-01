@@ -467,9 +467,10 @@ static bool liquidEyeFog(int bx, int by, int bz,
     return true;
 }
 
-static unsigned int skyRadialColor(unsigned int inner, unsigned int outer, float r, float yoff) {
+static unsigned int skyRadialColor(unsigned int inner, unsigned int outer, float r, float yoff,
+                                   float fadeEnd = SKY_FOG_FAR) {
     float d = sqrtf(r * r + yoff * yoff);
-    float t = d / SKY_FOG_FAR;
+    float t = d / fadeEnd;
     if (t > 1.0f) t = 1.0f;
     float f = t * t * (3.0f - 2.0f * t);
     unsigned int out = 0xFF000000u;
@@ -481,11 +482,12 @@ static unsigned int skyRadialColor(unsigned int inner, unsigned int outer, float
     return out;
 }
 
-static void skyBuildDisc(ColorVertex* v, unsigned int inner, unsigned int outer, float yoff) {
+static void skyBuildDisc(ColorVertex* v, unsigned int inner, unsigned int outer, float yoff,
+                         float fadeEnd = SKY_FOG_FAR) {
 
     unsigned int rc[SKY_RINGS];
     for (int ring = 0; ring < SKY_RINGS; ring++)
-        rc[ring] = skyRadialColor(inner, outer, SKY_RING_R[ring], yoff);
+        rc[ring] = skyRadialColor(inner, outer, SKY_RING_R[ring], yoff, fadeEnd);
     static float s_cs[SKY_SECTORS + 1], s_sn[SKY_SECTORS + 1];
     static bool s_anglesReady = false;
     if (!s_anglesReady) {
@@ -574,13 +576,18 @@ static void renderSkyVoid(float px, float py, float pz) {
         int dyKey = (int)(dy * 0.125f);
         const unsigned int vc = g_voidColorNow;
 
+        extern float g_viewDistEff;
+        float voidFade = 0.8f * g_viewDistEff;
+        if (voidFade < 8.0f) voidFade = 8.0f;
+        if (voidFade > SKY_FOG_FAR) voidFade = SKY_FOG_FAR;
         static ColorVertex* vv = 0;
         static unsigned int vBuiltVc = 0, vBuiltFc = 0;
         static int vBuiltDy = -1;
+        static float vBuiltFade = -1.0f;
         if (!vv) vv = (ColorVertex*)memalign(16, (size_t)SKY_MESH_VERTS * sizeof(ColorVertex));
-        if (vv && (vc != vBuiltVc || fc != vBuiltFc || dyKey != vBuiltDy)) {
-            vBuiltVc = vc; vBuiltFc = fc; vBuiltDy = dyKey;
-            skyBuildDisc(vv, vc, fc, (float)dyKey * 8.0f);
+        if (vv && (vc != vBuiltVc || fc != vBuiltFc || dyKey != vBuiltDy || voidFade != vBuiltFade)) {
+            vBuiltVc = vc; vBuiltFc = fc; vBuiltDy = dyKey; vBuiltFade = voidFade;
+            skyBuildDisc(vv, vc, fc, (float)dyKey * 8.0f, voidFade);
         }
         if (vv) {
             sceGumLoadIdentity();

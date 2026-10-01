@@ -472,7 +472,8 @@ void guPresent(void) {
     sceKernelChangeThreadPriority(0, prio);
 
     extern volatile int g_powerSuspended;
-    if (late && !g_powerSuspended) g_postLate++;
+    extern volatile bool g_guDialogActive;
+    if (late && !g_powerSuspended && !g_guDialogActive) g_postLate++;
     g_drawIdx = (drawn == g_fb[1]) ? 1 : 0;
 
     {

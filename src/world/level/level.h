@@ -18,6 +18,7 @@ class Level {
 public:
     World* w;
     EntityList entities;
+    bool tickingEntities = false;
     std::vector<TileEntity*> tileEntities;
     std::vector<AABB> boxes;
 
@@ -61,6 +62,7 @@ public:
 
     void linkEntity(Entity* e);
     void unlinkEntity(Entity* e);
+    bool makeEntitySlot();
     void relinkIfMoved(Entity* e);
 
     bool isUnobstructed(const AABB& box) const;

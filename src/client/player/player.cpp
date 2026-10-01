@@ -139,7 +139,6 @@ void quitToMenuNoSave(MenuState& s) {
         }
     }
     s.worldSelected = sel;
-    LevelStorage::setActiveWorld(0, 0, 0, 0, 0);
 
     panoramaLoadAll();
     s.screen = SCREEN_WORLDS;

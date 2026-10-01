@@ -292,6 +292,18 @@ static inline bool paneAttachsTo(unsigned char id, unsigned char nb) {
 
 static inline unsigned int div255(unsigned int x) { return (x + 1 + (x >> 8)) >> 8; }
 
+static inline unsigned short color8888To5650(unsigned int c) {
+    unsigned int r = div255((c & 0xFF) * 31u + 127u);
+    unsigned int g = div255(((c >> 8) & 0xFF) * 63u + 127u);
+    unsigned int b = div255(((c >> 16) & 0xFF) * 31u + 127u);
+    return (unsigned short)(r | (g << 5) | (b << 11));
+}
+static inline unsigned int color5650To8888(unsigned short c) {
+    unsigned int r = c & 31, g = (c >> 5) & 63, b = c >> 11;
+    r = (r << 3) | (r >> 2); g = (g << 2) | (g >> 4); b = (b << 3) | (b >> 2);
+    return 0xFF000000u | (b << 16) | (g << 8) | r;
+}
+
 static inline unsigned int mulColor(unsigned int a, unsigned int b) {
     unsigned int r = div255(((a)       & 0xFF) * ((b)       & 0xFF));
     unsigned int g = div255(((a >> 8)  & 0xFF) * ((b >> 8)  & 0xFF));
@@ -379,9 +391,16 @@ static inline short uvQ(float t) {
 
 struct DrawVertex {
     short u, v;
-    unsigned int color;
-    short x, y, z, w;
+    unsigned short color;
+    short x, y, z;
 };
+static_assert(sizeof(DrawVertex) == 12, "DrawVertex");
+
+static inline int quadVerts(int triVerts) { return triVerts / 6 * 4; }
+static inline const DrawVertex& chunkTriVert(const DrawVertex* vb, int i) {
+    static const unsigned char k[6] = { 0, 1, 2, 2, 3, 0 };
+    return vb[i / 6 * 4 + k[i % 6]];
+}
 
 struct ChunkSection {
     DrawVertex*  mesh;
