@@ -15,6 +15,10 @@ static inline bool heavyIsFree(World* w, int x, int y, int z) {
 
 void heavyTileTick(World* w, int x, int y, int z, unsigned char id) {
     if (y >= 0 && heavyIsFree(w, x, y - 1, z)) {
+        if (!FallingTile::newFallingTileAllowed()) {
+            worldScheduleTick(w, x, y, z, id, 2);
+            return;
+        }
         FallingTile* e = new FallingTile(&g_level, x + 0.5f, y + 0.5f, z + 0.5f,
                                          id, worldData(w, x, y, z));
         g_level.addEntity(e);

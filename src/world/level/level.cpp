@@ -131,9 +131,6 @@ bool Level::containsFireTile(const AABB& box) const {
     int x0 = Mth::floor(box.x0), x1 = Mth::floor(box.x1 + 1);
     int y0 = Mth::floor(box.y0), y1 = Mth::floor(box.y1 + 1);
     int z0 = Mth::floor(box.z0), z1 = Mth::floor(box.z1 + 1);
-    if (box.x0 < 0) x0--;
-    if (box.y0 < 0) y0--;
-    if (box.z0 < 0) z0--;
     for (int x = x0; x < x1; x++)
         for (int y = y0; y < y1; y++)
             for (int z = z0; z < z1; z++) {
@@ -378,8 +375,11 @@ bool Level::makeEntitySlot() {
     float bestD2 = -1.0f;
     for (size_t i = 0; i < entities.size(); i++) {
         Entity* e = entities[i];
-        if (e == player || e->removed || e->rider || e->riding || !e->isItemEntity()) continue;
-        const int rank = isLoadedAt(e->x, e->z) ? 1 : 2;
+        if (e == player || e->removed || e->rider || e->riding || e->isHangingEntity()) continue;
+        int rank;
+        if (e->isItemEntity()) rank = isLoadedAt(e->x, e->z) ? 3 : 4;
+        else if (e->isMob()) rank = isLoadedAt(e->x, e->z) ? 1 : 2;
+        else continue;
         const float dx = e->x - px, dz = e->z - pz, d2 = dx * dx + dz * dz;
         if (rank > bestRank || (rank == bestRank && d2 > bestD2)) { best = (int)i; bestRank = rank; bestD2 = d2; }
     }

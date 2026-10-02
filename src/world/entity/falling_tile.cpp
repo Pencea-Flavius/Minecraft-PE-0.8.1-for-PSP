@@ -7,6 +7,10 @@
 #include "nbt/compound_tag.h"
 #include "util/mth.h"
 
+int FallingTile::liveCount = 0;
+
+FallingTile::~FallingTile() { --liveCount; }
+
 FallingTile::FallingTile(Level* level)
     : super(level), tile(0), data(0), time(0) {
     init();
@@ -22,6 +26,7 @@ FallingTile::FallingTile(Level* level, float px, float py, float pz, int tile, i
 }
 
 void FallingTile::init() {
+    ++liveCount;
     entityRendererId = ER_FALLINGTILE_RENDERER;
     time = 0;
     blocksBuilding = true;

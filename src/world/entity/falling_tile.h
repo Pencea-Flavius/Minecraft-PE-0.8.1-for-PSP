@@ -9,6 +9,11 @@ class FallingTile : public Entity {
 public:
     FallingTile(Level* level);
     FallingTile(Level* level, float x, float y, float z, int tile, int data);
+    virtual ~FallingTile();
+
+    static const int MAX_FALLING_TILE = 20;
+    static int  liveCount;
+    static bool newFallingTileAllowed() { return liveCount < MAX_FALLING_TILE; }
 
     virtual void tick();
     virtual int  getEntityTypeId() const;
