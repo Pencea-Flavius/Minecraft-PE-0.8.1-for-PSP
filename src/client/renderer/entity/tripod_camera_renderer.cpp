@@ -45,8 +45,10 @@ void TripodCameraRenderer::render(Entity* entity, float x, float y, float z,
     unsigned int c = brightColorFloored(br, ENTITY_LIGHT_FLOOR);
     float fy = y - cam->heightOffset;
 
+    const bool wantFlash = cam->activated && cam->life < 8 && cam->life > 0;
     ChunkVertex* vLegs  = (ChunkVertex*)guFrameAlloc(12 * sizeof(ChunkVertex));
     ChunkVertex* vBox   = (ChunkVertex*)guFrameAlloc(36 * sizeof(ChunkVertex));
+    ChunkVertex* vFlash = wantFlash ? (ChunkVertex*)guFrameAlloc(6 * sizeof(ChunkVertex)) : 0;
     if (!vLegs || !vBox) return;
 
     if (s_have) textureBindNoMip(&s_tex);
@@ -97,6 +99,17 @@ void TripodCameraRenderer::render(Entity* entity, float x, float y, float z,
                         GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
                         n, 0, v);
 
+        if (wantFlash && vFlash) {
+            unsigned int fa = (unsigned int)(cam->life * 255 / 8);
+            unsigned int fc = (fa << 24) | 0x00FFFFFFu;
+            float fz = z0 - 0.04f;
+            ChunkVertex* fv = vFlash;
+            const float fr = 0.55f;
+            int fn = quad(fv, 0, fc, -fr,-fr,fz, fr,-fr,fz, fr,fr,fz, -fr,fr,fz, 48,0, 64,16);
+            sceGumDrawArray(GU_TRIANGLES,
+                            GU_TEXTURE_32BITF | GU_COLOR_8888 | GU_VERTEX_32BITF | GU_TRANSFORM_3D,
+                            fn, 0, fv);
+        }
     }
 
     sceGumPopMatrix();

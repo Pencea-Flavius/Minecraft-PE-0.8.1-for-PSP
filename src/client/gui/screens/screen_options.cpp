@@ -54,6 +54,8 @@ static const OptionRowDef g_optionRows[OPT_CATEGORIES][OPT_MAX_ROWS] = {
         { 0,           "Hide GUI",         {"Off", "On", 0, 0}, 2, 0 },
 
         { 0,           "Interface Opacity", {0, 0, 0, 0}, 11, 8, true, 0, 10 },
+
+        { "Extras",    "PSP Extras",       {"Off", "On", 0, 0}, 2, 1 },
     },
     {
 
@@ -103,7 +105,7 @@ static const OptionRowDef g_optionRows[OPT_CATEGORIES][OPT_MAX_ROWS] = {
     },
 };
 
-static const int g_optionRowCount[OPT_CATEGORIES] = { 9, 6, 11, 8 };
+static const int g_optionRowCount[OPT_CATEGORIES] = { 10, 6, 11, 8 };
 static const char* g_optionCategoryNames[OPT_CATEGORIES] = { "Game", "Controls", "Graphics", "Audio" };
 static int g_optionValueIdx[OPT_CATEGORIES][OPT_MAX_ROWS];
 
@@ -138,6 +140,9 @@ extern bool  g_worldBuilt;
 extern bool  g_paused;
 extern bool  g_optionsOpen;
 extern World g_world;
+
+int g_pspExtras = 1;
+namespace CreativeItems { void invalidate(); }
 
 #define CAT_GRAPHICS    2
 #define ROW_RENDERDIST  0
@@ -175,6 +180,7 @@ static int renderDistChoices() { return g_lowMemPsp ? 2 : 4; }
 #define ROW_BLOCKOUTLINE 6
 #define ROW_HIDEGUI      7
 #define ROW_HUDOPACITY   8
+#define ROW_PSPEXTRAS    9
 
 #define CAT_AUDIO       3
 #define ROW_SOUNDVOL    0
@@ -243,6 +249,12 @@ static void optionsApply() {
     g_hideGui        = g_optionValueIdx[CAT_GAME][ROW_HIDEGUI];
 
     g_hudOpacity     = g_optionValueIdx[CAT_GAME][ROW_HUDOPACITY] / 10.0f;
+
+    int wantExtras = g_optionValueIdx[CAT_GAME][ROW_PSPEXTRAS];
+    if (wantExtras != g_pspExtras) {
+        g_pspExtras = wantExtras;
+        CreativeItems::invalidate();
+    }
 
     int wantParticles = g_optionValueIdx[CAT_GRAPHICS][ROW_PARTICLES];
     if (!wantParticles && g_particles) particlesReset();

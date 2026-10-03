@@ -57,8 +57,7 @@ float worldViewDistEffective(float slider) {
     return g_viewDistEff;
 }
 
-static const float MIP_CRISP_RADIUS     = 16.0f;
-static const float MIP_BLOCKS_PER_LEVEL = 16.0f;
+static const float MIP_SLOPE_DIST       = 24.0f;
 
 static int s_terrainMipCount = 0;
 
@@ -87,7 +86,12 @@ void worldRebuildStep(const World* cw, float camX, float camY, float camZ, float
     profEnd(PROF_STREAM);
 
     profBegin(PROF_LIGHT);
-    worldUpdateLights(w);
+    {
+        const bool prevSim = w->simTick;
+        w->simTick = true;
+        worldUpdateLights(w);
+        w->simTick = prevSim;
+    }
     profEnd(PROF_LIGHT);
     profBegin(PROF_REBUILD);
 
@@ -142,6 +146,11 @@ void worldRebuildStep(const World* cw, float camX, float camY, float camZ, float
     profBegin(PROF_RBUILD);
     unsigned int tStart = sceKernelGetSystemTimeLow();
     int built = 0;
+    if (chunkMeshAsyncOn()) {
+        built = chunkMeshAsyncCollect(w);
+        if (chunkMeshAsyncIdle() && nc > 0) chunkMeshAsyncDispatch(cand[0].c, w, cand[0].si);
+        nc = 0;
+    }
     for (int k = 0; k < nc; k++) {
         chunkBuildSection(cand[k].c, w, cand[k].si);
         built++;
@@ -227,26 +236,19 @@ void worldDraw(const World* cw, float camX, float camY, float camZ, float viewDi
 
     extern int g_noMipmap;
     bool distMip = !g_noMipmap && terrain && terrain->mipCount > 0;
-    float maxLvl = distMip ? (float)terrain->mipCount : 0.0f;
     s_terrainMipCount = terrain ? terrain->mipCount : 0;
 
     if (terrain) {
         if (g_noMipmap) textureBindNoMip(terrain);
         else            textureBind(terrain);
     }
-    for (int i = 0; i < nOpaque; i++) {
-        if (distMip) {
-            float lvl = (sqrtf(g_opaqueList[i].d2) - MIP_CRISP_RADIUS) * (1.0f / MIP_BLOCKS_PER_LEVEL);
-            if (lvl < 0.0f) lvl = 0.0f; else if (lvl > maxLvl) lvl = maxLvl;
-            sceGuTexLevelMode(GU_TEXTURE_CONST, lvl);
-        }
-        chunkDrawSection(g_opaqueList[i].s);
+    if (distMip) {
+        sceGuTexSlope(1.0f / MIP_SLOPE_DIST);
+        sceGuTexLevelMode(GU_TEXTURE_SLOPE, 0.0f);
     }
+    for (int i = 0; i < nOpaque; i++) chunkDrawSection(g_opaqueList[i].s);
 
-    if (nearPatchHas(NEAR_PATCH_OPAQUE)) {
-        if (distMip) sceGuTexLevelMode(GU_TEXTURE_CONST, 0.0f);
-        nearPatchDraw(NEAR_PATCH_OPAQUE);
-    }
+    if (nearPatchHas(NEAR_PATCH_OPAQUE)) nearPatchDraw(NEAR_PATCH_OPAQUE);
     if (distMip) textureMipAuto();
     sceGuEnable(GU_ALPHA_TEST);
 
@@ -256,7 +258,9 @@ void worldDraw(const World* cw, float camX, float camY, float camZ, float viewDi
             if (any) return;
             if (distMip) {
                 textureBind(terrain);
-                sceGuTexFilter(GU_NEAREST_MIPMAP_NEAREST, GU_NEAREST);
+                sceGuTexFilter(GU_NEAREST_MIPMAP_LINEAR, GU_NEAREST);
+                sceGuTexSlope(1.0f / MIP_SLOPE_DIST);
+                sceGuTexLevelMode(GU_TEXTURE_SLOPE, 0.0f);
             } else {
                 textureBindNoMip(terrain);
             }
@@ -264,24 +268,16 @@ void worldDraw(const World* cw, float camX, float camY, float camZ, float viewDi
         };
         for (int i = 0; i < g_nVisChunks; i++) {
             const ChunkMesh* c = g_visChunks[i];
-            float dx = c->cx - camX, dz = c->cz - camZ;
             for (int si = 0; si < N_SECTIONS; si++) {
                 const ChunkSection* s = &c->sec[si];
                 if (s->noMipCount == 0 || !s->visible) continue;
                 bindCutout();
-                if (distMip) {
-                    float dy = (float)(si * SECTION_SY + SECTION_SY / 2) - camY;
-                    float lvl = (sqrtf(dx * dx + dy * dy + dz * dz) - MIP_CRISP_RADIUS) * (1.0f / MIP_BLOCKS_PER_LEVEL);
-                    if (lvl < 0.0f) lvl = 0.0f; else if (lvl > maxLvl) lvl = maxLvl;
-                    sceGuTexLevelMode(GU_TEXTURE_CONST, lvl);
-                }
                 chunkDrawNoMipSection(s, g_eyeInLava ? NOMIP_NO_LAVA : NOMIP_ALL);
             }
         }
 
         if (nearPatchHas(NEAR_PATCH_CUTOUT) || (!g_eyeInLava && nearPatchHas(NEAR_PATCH_LAVA))) {
             bindCutout();
-            if (distMip) sceGuTexLevelMode(GU_TEXTURE_CONST, 0.0f);
             nearPatchDraw(NEAR_PATCH_CUTOUT);
             if (!g_eyeInLava) nearPatchDraw(NEAR_PATCH_LAVA);
         }
@@ -324,29 +320,22 @@ void worldDraw(const World* cw, float camX, float camY, float camZ, float viewDi
     }
 
     if (distMip)
-        sceGuTexFilter(g_fancyGraphics ? GU_NEAREST_MIPMAP_NEAREST
-                                       : GU_NEAREST_MIPMAP_LINEAR, GU_NEAREST);
+        sceGuTexFilter(GU_NEAREST_MIPMAP_LINEAR, GU_NEAREST);
+    if (distMip) {
+        sceGuTexSlope(1.0f / MIP_SLOPE_DIST);
+        sceGuTexLevelMode(GU_TEXTURE_SLOPE, 0.0f);
+    }
     sceGuEnable(GU_ALPHA_TEST);
     for (int i = 0; i < g_nVisChunks; i++) {
         const ChunkMesh* c = g_visChunks[i];
-        float dx = c->cx - camX, dz = c->cz - camZ;
         for (int si = 0; si < N_SECTIONS; si++) {
             const ChunkSection* s = &c->sec[si];
             if (s->leavesCount == 0 || !s->visible) continue;
-            if (distMip) {
-                float dy = (float)(si * SECTION_SY + SECTION_SY / 2) - camY;
-                float lvl = (sqrtf(dx * dx + dy * dy + dz * dz) - MIP_CRISP_RADIUS) * (1.0f / MIP_BLOCKS_PER_LEVEL);
-                if (lvl < 0.0f) lvl = 0.0f; else if (lvl > maxLvl) lvl = maxLvl;
-                sceGuTexLevelMode(GU_TEXTURE_CONST, lvl);
-            }
             chunkDrawLeavesSection(s);
         }
     }
 
-    if (nearPatchHas(NEAR_PATCH_LEAVES)) {
-        if (distMip) sceGuTexLevelMode(GU_TEXTURE_CONST, 0.0f);
-        nearPatchDraw(NEAR_PATCH_LEAVES);
-    }
+    if (nearPatchHas(NEAR_PATCH_LEAVES)) nearPatchDraw(NEAR_PATCH_LEAVES);
 
     if (distMip) {
         sceGuTexFilter(GU_NEAREST_MIPMAP_LINEAR, GU_NEAREST);
@@ -390,20 +379,13 @@ void worldDrawWater(const World* w, float camX, float camY, float camZ, float vi
 
     extern int g_noMipmap;
     bool distMip = !g_noMipmap && s_terrainMipCount > 0;
-    float maxLvl = (float)s_terrainMipCount;
-    for (int i = 0; i < cnt; i++) {
-        if (distMip) {
-            float lvl = (sqrtf(g_waterList[i].d2) - MIP_CRISP_RADIUS) * (1.0f / MIP_BLOCKS_PER_LEVEL);
-            if (lvl < 0.0f) lvl = 0.0f; else if (lvl > maxLvl) lvl = maxLvl;
-            sceGuTexLevelMode(GU_TEXTURE_CONST, lvl);
-        }
-        chunkDrawWaterSection(g_waterList[i].s);
+    if (distMip) {
+        sceGuTexSlope(1.0f / MIP_SLOPE_DIST);
+        sceGuTexLevelMode(GU_TEXTURE_SLOPE, 0.0f);
     }
+    for (int i = 0; i < cnt; i++) chunkDrawWaterSection(g_waterList[i].s);
 
-    if (nearPatchHas(NEAR_PATCH_WATER)) {
-        if (distMip) sceGuTexLevelMode(GU_TEXTURE_CONST, 0.0f);
-        nearPatchDraw(NEAR_PATCH_WATER);
-    }
+    if (nearPatchHas(NEAR_PATCH_WATER)) nearPatchDraw(NEAR_PATCH_WATER);
     if (distMip) textureMipAuto();
     guListSync();
     guGlobalsCheck(GU_PHASE_WATER);

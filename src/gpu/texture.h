@@ -45,6 +45,7 @@ extern unsigned int g_textureFailHeapBig;
 extern char g_textureLastFailed[80];
 
 void textureGenMips(Texture* tex, int minSize);
+void textureBleedTransparent(Texture* tex, int tile);
 
 bool textureLoadMipLevel(Texture* tex, int level, const char* path);
 

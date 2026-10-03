@@ -31,6 +31,7 @@
 #include "client/gui/screens/panorama.h"
 #include "client/player/player.h"
 #include "client/renderer/render.h"
+#include "world/entity/tripod_camera.h"
 
 #include "platform/time.h"
 #include "world/level/level.h"
@@ -420,6 +421,8 @@ int main(int argc, char* argv[]) {
 
         panoramaSetLoaded(s.screen != SCREEN_GAME && !g_worldBuilt);
 
+        { extern bool g_photoPending;
+          if (g_photoPending) guWaitDrawBufferHidden(); }
         if (!guStartFrame(s.screen == SCREEN_GAME ? g_clearColorNow : 0xFF000000u)) continue;
         fpsFrames++;
 
@@ -429,11 +432,12 @@ int main(int argc, char* argv[]) {
             guOrtho();
             sceGuDisable(GU_DEPTH_TEST);
 
-            if (gameProgressScreenUp()) { guEndFrame(); continue; }
+            extern bool g_photoPending;
+            if (gameProgressScreenUp() && !g_photoPending) { guEndFrame(); continue; }
             extern bool g_invOpen;
             extern int g_showFps, g_showCoords;
             extern int g_hideGui;
-            if (!g_invOpen && !g_hideGui) {
+            if (!g_invOpen && !g_photoPending && !g_hideGui) {
 
                 float ty = 10.0f;
                 if (g_showFps) {
@@ -453,11 +457,52 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            if (Screen* over = overlayScreen()) { over->render(s); }
+            if (!g_photoPending)
+                if (Screen* over = overlayScreen()) { over->render(s); }
 
             gameHintsDraw(s);
 
             sceGuEnable(GU_DEPTH_TEST);
+
+            if (g_photoPending) {
+                guFinishFrame();
+
+                const char* dev = pathDevice();
+                char photoDir[64];
+                std::snprintf(photoDir, sizeof(photoDir), "%s/PSP", dev);
+                sceIoMkdir(photoDir, 0777);
+                std::snprintf(photoDir, sizeof(photoDir), "%s/PSP/PHOTO", dev);
+                sceIoMkdir(photoDir, 0777);
+                std::snprintf(photoDir, sizeof(photoDir), "%s/PSP/PHOTO/Minecraft", dev);
+                sceIoMkdir(photoDir, 0777);
+                char full[320];
+                for (int i = 0; i < 10000; i++) {
+                    std::snprintf(full, sizeof(full), "%s/img_%04d.png", photoDir, i);
+                    FILE* probe = fopen(full, "rb");
+                    if (!probe) break;
+                    fclose(probe);
+                }
+                if (!guSavePhotoPng(full, 1)) {
+                    sceIoMkdir(assetPath("photos"), 0777);
+                    char rel[64];
+                    for (int i = 0; i < 10000; i++) {
+                        std::snprintf(rel, sizeof(rel), "photos/img_%04d.png", i);
+                        std::strncpy(full, assetPath(rel), sizeof(full) - 1);
+                        full[sizeof(full) - 1] = '\0';
+                        FILE* probe = fopen(full, "rb");
+                        if (!probe) break;
+                        fclose(probe);
+                    }
+                    guSavePhotoPng(full, 1);
+                }
+                g_photoPending = false;
+                g_photoCamera = 0;
+
+                extern void gameTimerReset();
+                gameTimerReset();
+
+                continue;
+            }
 
             guEndFrame();
             continue;

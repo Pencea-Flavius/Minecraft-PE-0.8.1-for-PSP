@@ -400,7 +400,9 @@ void GameMode::handleInput(unsigned int pressed, unsigned int held) {
 
                 Mob* near = nearbyTripodCamera();
                 if (near) {
-                    hudChatMessage("There's already a camera here.");
+
+                    if (!near->playerInteract())
+                        hudChatMessage("There's already a camera here. Hold paper to take a picture.");
                 } else if (countTripodCameras() >= MAX_TRIPOD_CAMERAS) {
 
                     hudChatMessage("Can't place the camera. The maximum number of "
@@ -421,6 +423,10 @@ void GameMode::handleInput(unsigned int pressed, unsigned int held) {
             if ((pressed & PSP_CTRL_LTRIGGER) && !g_useItemDelay) {
                 g_useItemDelay = USE_ITEM_DELAY_TICKS;
                 bool handled = interactMobUnderCrosshair();
+                if (!handled) {
+                    Mob* near = nearbyTripodCamera();
+                    if (near) handled = near->playerInteract();
+                }
                 if (handled) playerSwing();
             }
             pressed &= ~PSP_CTRL_LTRIGGER;
@@ -589,7 +595,13 @@ CrosshairTarget gameModeCrosshairTarget() {
 
     if (sel && sel->id == ITEM_CAMERA) {
 
-        t.useLabel = !nearbyTripodCamera() ? "Place" : 0;
+        t.useLabel = !nearbyTripodCamera() ? "Place"
+                   : (g_gameMode && g_gameMode->isCreative()) ? "Take Picture" : 0;
+        return t;
+    }
+
+    if (sel && sel->id == ITEM_PAPER) {
+        t.useLabel = nearbyTripodCamera() ? "Take Picture" : 0;
         return t;
     }
 

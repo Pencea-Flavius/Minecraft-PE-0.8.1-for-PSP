@@ -274,6 +274,50 @@ void textureGenMips(Texture* tex, int minSize) {
     tex->mipCount = i;
 }
 
+static void bleedLevel(unsigned int* px, int w, int h, int tile) {
+    if (!px || tile < 1) return;
+    unsigned int* tmp = (unsigned int*)malloc((size_t)w * h * 4);
+    if (!tmp) return;
+    for (int pass = 0; pass < 2; pass++) {
+        memcpy(tmp, px, (size_t)w * h * 4);
+        bool changed = false;
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) {
+                unsigned int c = tmp[y * w + x];
+                if (c >> 24) continue;
+                if (c & 0x00FFFFFFu) continue;
+                const int tx = x - x % tile, ty = y - y % tile;
+                unsigned int r = 0, g = 0, b = 0, n = 0;
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++) {
+                        const int nx = x + dx, ny = y + dy;
+                        if ((!dx && !dy) || nx < tx || ny < ty || nx >= tx + tile || ny >= ty + tile) continue;
+                        const unsigned int q = tmp[ny * w + nx];
+                        if (!(q >> 24) && !(q & 0x00FFFFFFu)) continue;
+                        r += q & 0xFF; g += (q >> 8) & 0xFF; b += (q >> 16) & 0xFF; n++;
+                    }
+                if (!n) continue;
+                r /= n; g /= n; b /= n;
+                if (!r && !g && !b) r = 1;
+                px[y * w + x] = r | (g << 8) | (b << 16);
+                changed = true;
+            }
+        if (!changed) break;
+    }
+    free(tmp);
+    dcacheFlush(px, (size_t)w * h * 4);
+}
+
+void textureBleedTransparent(Texture* tex, int tile) {
+    if (!tex || tex->psm != GU_PSM_8888 || tex->swizzled) return;
+    int w = tex->texW, h = tex->texH;
+    bleedLevel((unsigned int*)tex->data, w, h, tile);
+    for (int i = 0; i < tex->mipCount; i++) {
+        w /= 2; h /= 2; tile /= 2;
+        bleedLevel((unsigned int*)tex->mip[i], w, h, tile);
+    }
+}
+
 static void swizzleBlock(void* dst, const void* src, int rowBytes, int height) {
     int wBlocks = rowBytes / 16;
     int hBlocks = height / 8;

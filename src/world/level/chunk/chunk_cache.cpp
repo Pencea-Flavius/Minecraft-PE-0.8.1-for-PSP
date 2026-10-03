@@ -197,6 +197,7 @@ static int genWorker(SceSize, void*) {
 }
 
 void worldGenWorkerStart(World* w) {
+    chunkMeshWorkerStart();
     if (s_workerThid >= 0) return;
 
     if (worldFitsInWindow(w)) return;
@@ -207,6 +208,7 @@ void worldGenWorkerStart(World* w) {
 }
 
 void worldGenWorkerStop() {
+    chunkMeshWorkerStop();
     if (s_workerThid < 0) return;
     g_workerQuit = true;
 
@@ -242,6 +244,7 @@ int worldStream(World* w, float px, float pz, int budgetMs) {
         if (!c->resident) continue;
         if (c->x >= pcx - E && c->x <= pcx + E && c->z >= pcz - E && c->z <= pcz + E) continue;
         if (worldSlotBusy(c)) continue;
+        if (chunkMeshAsyncPins(c->x, c->z)) continue;
         evict(w, i);
         if ((unsigned int)(sceKernelGetSystemTimeLow() - tStart) > EVICT_BUDGET_US) break;
     }
@@ -275,6 +278,10 @@ int worldStream(World* w, float px, float pz, int budgetMs) {
         if (bestD == 0x7FFFFFFF) return brought;
 
         if (chunkStorageUnreachable()) return brought;
+        {
+            const LevelChunk* old = worldSlot(w, bestX, bestZ);
+            if (old->resident && chunkMeshAsyncPins(old->x, old->z)) return brought;
+        }
         claim(w, bestX, bestZ);
 
         bool gotLight = false, populated = true;

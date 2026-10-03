@@ -396,11 +396,8 @@ struct DrawVertex {
 };
 static_assert(sizeof(DrawVertex) == 12, "DrawVertex");
 
-static inline int quadVerts(int triVerts) { return triVerts / 6 * 4; }
-static inline const DrawVertex& chunkTriVert(const DrawVertex* vb, int i) {
-    static const unsigned char k[6] = { 0, 1, 2, 2, 3, 0 };
-    return vb[i / 6 * 4 + k[i % 6]];
-}
+static inline int quadVerts(int triVerts) { return triVerts; }
+static inline const DrawVertex& chunkTriVert(const DrawVertex* vb, int i) { return vb[i]; }
 
 struct ChunkSection {
     DrawVertex*  mesh;
@@ -458,6 +455,13 @@ void chunkInitLazy(ChunkMesh* c, int ox, int oz);
 bool sectionCannotEmit(const World* w, int ox, int oz, int si);
 
 void chunkBuildSection(ChunkMesh* c, const World* w, int si);
+void chunkMeshWorkerStart();
+void chunkMeshWorkerStop();
+bool chunkMeshAsyncOn();
+bool chunkMeshAsyncIdle();
+bool chunkMeshAsyncPins(int cx, int cz);
+void chunkMeshAsyncDispatch(ChunkMesh* c, const World* w, int si);
+int  chunkMeshAsyncCollect(const World* w);
 
 void chunkMeshHeapProbe();
 

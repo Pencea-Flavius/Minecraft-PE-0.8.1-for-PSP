@@ -169,6 +169,8 @@ const CreativeEntry kItems[] = {
     { ITEM_BONEMEAL, 1, 0x5 }, { ITEM_BONEMEAL, 1, 0xD }, { ITEM_BONEMEAL, 1, 0x9 }, { ITEM_BONEMEAL, 1, 0x3 },
     { ITEM_BONEMEAL, 1, 0xB }, { ITEM_BONEMEAL, 1, 0xA }, { ITEM_BONEMEAL, 1, 0x2 }, { ITEM_BONEMEAL, 1, 0x6 },
 
+    { ITEM_CAMERA,              1, 0 },
+
     { ITEM_SPAWN_EGG,           1, EntityTypes::IdZombie },
     { ITEM_SPAWN_EGG,           1, EntityTypes::IdCreeper },
     { ITEM_SPAWN_EGG,           1, EntityTypes::IdSkeleton },
@@ -183,12 +185,15 @@ bool  s_built = false;
 
 }
 
+extern int g_pspExtras;
+
 namespace CreativeItems {
 
 void populate() {
     if (s_built) return;
     for (int t = 0; t < CREATIVE_TABS; t++) s_tabN[t] = 0;
     for (int i = 0; i < N_ITEMS; i++) {
+        if (kItems[i].id == ITEM_CAMERA && !g_pspExtras) continue;
 
         Item* it = (kItems[i].id > 0 && kItems[i].id < 4096) ? Item::items[kItems[i].id] : 0;
         int tab = it ? it->creativeTab : 0;
@@ -198,6 +203,8 @@ void populate() {
     }
     s_built = true;
 }
+
+void invalidate() { s_built = false; }
 
 int tabCount(int tab) {
     if (tab < 0 || tab >= CREATIVE_TABS) return 0;

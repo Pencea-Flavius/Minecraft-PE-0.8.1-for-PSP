@@ -50,14 +50,35 @@ public:
     const char* label() const { return "Flat"; }
 };
 
+class SkyLevelSource : public LevelSource {
+public:
+
+    void buildTerrain(World* w, long seed) {
+        worldGenerateMCPE(w, seed, LevelStorage::getActiveGenMask());
+        worldGuaranteeSkyLiquids(w, seed);
+        worldSettleLiquids(w);
+    }
+    void buildChunk(World* w, int cx, int cz) { chunkGenerateTerrain(w, cx, cz); }
+    bool floatingIslands() const { return true; }
+
+    bool genFeatureAllowed(int feature) const { return feature != GEN_FEATURE_CAVES; }
+
+    float horizonHeight() const { return 0.0f; }
+
+    float cloudHeight() const { return -16.0f; }
+    const char* label() const { return "Sky"; }
+};
+
 RandomLevelSource s_random;
 FlatLevelSource   s_flat;
+SkyLevelSource    s_sky;
 
 }
 
 LevelSource& levelSourceFor(int worldType) {
 
     if (worldType == WORLD_TYPE_FLAT) return s_flat;
+    if (worldType == WORLD_TYPE_SKY)  return s_sky;
     return s_random;
 }
 

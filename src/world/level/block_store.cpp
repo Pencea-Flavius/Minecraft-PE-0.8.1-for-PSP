@@ -5,6 +5,8 @@
 #include <string.h>
 
 unsigned int g_blockOomDrops = 0;
+const unsigned char* g_edgeColumn = 0;
+int g_edgeSkyFromY = 0;
 
 void blockAlloc(World* w) {
 

@@ -202,6 +202,7 @@ static void craftSelectedItem() {
 }
 
 static int s_craftSize   = Recipe::SIZE_2X2;
+extern int g_pspExtras;
 static int s_filterMode  = CRAFT_WORKBENCH;
 static int numCategories() { return (s_filterMode == CRAFT_STONECUTTER) ? 1 : 4; }
 
@@ -220,6 +221,7 @@ void craftOpen(int craftingSize, int filterMode) {
         ItemInstance res = r->getResultItem();
         if (s_filterMode == CRAFT_STONECUTTER ? !isStonecutterItem(res)
                                               :  isStonecutterItem(res)) continue;
+        if (res.id == ITEM_CAMERA && !g_pspExtras) continue;
         Item* item = res.getItem();
         if (!item || item->category < 0) continue;
 

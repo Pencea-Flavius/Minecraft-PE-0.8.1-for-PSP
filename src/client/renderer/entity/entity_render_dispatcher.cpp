@@ -90,6 +90,8 @@ void EntityRenderDispatcher::renderAll(Level* level, float a) {
         Entity* e = level->entities[i];
         if (!e || e->removed || e->invisible) continue;
 
+        if (g_photoPending && e == g_photoCamera) continue;
+
         if (!worldColumnDrawn(&g_world, e->x, e->z)) continue;
         if (level->player) {
             float dx = e->x - level->player->x, dy = e->y - level->player->y, dz = e->z - level->player->z;

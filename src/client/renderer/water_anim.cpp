@@ -34,6 +34,18 @@ static float mthRandom() {
     return (float)rand() / (float)RAND_MAX;
 }
 
+static unsigned int crispBlend(unsigned int c0, unsigned int c1) {
+    int a0 = (c0 >> 24) & 0xFF, a1 = (c1 >> 24) & 0xFF;
+    unsigned int a = 255;
+    if (a0 + a1 < 255) { a = 0; a0 = 1; a1 = 1; }
+    else if (a0 > a1)  { a0 = 255; a1 = 1; }
+    else               { a0 = 1; a1 = 255; }
+    unsigned int out = a << 24;
+    for (int ch = 0; ch < 24; ch += 8)
+        out |= (unsigned int)((((c0 >> ch) & 0xFF) * a0 + ((c1 >> ch) & 0xFF) * a1) / (a0 + a1)) << ch;
+    return out;
+}
+
 void animateWaterTexture() {
     static float timer = 0.0f;
 
@@ -206,6 +218,27 @@ void animateWaterTexture() {
             unsigned int fireCol = ((unsigned)fa << 24) | ((unsigned)fb << 16) | ((unsigned)fg << 8) | (unsigned)fr;
             texPixels[((1 + f) * 16 + y) * texW + (15 * 16 + x)] = fireCol;
         }
+    }
+
+    static const unsigned char kLiquidTiles[][2] = {
+        { 12, 13 }, { 12, 14 }, { 12, 15 }, { 13, 14 }, { 13, 15 },
+        { 14, 13 }, { 14, 14 }, { 14, 15 }, { 15, 14 }, { 15, 15 },
+    };
+    for (int level = 1; level <= 2; level++) {
+        const unsigned int* src = (const unsigned int*)(level == 1 ? g_terrain.data : g_terrain.mip[0]);
+        unsigned int* dst = (unsigned int*)g_terrain.mip[level - 1];
+        if (!src || !dst) break;
+        const int srcStride = texW >> (level - 1), dstStride = texW >> level, size = 16 >> level;
+        for (unsigned t = 0; t < sizeof(kLiquidTiles) / sizeof(kLiquidTiles[0]); t++) {
+            const int y0 = kLiquidTiles[t][0] * size, x0 = kLiquidTiles[t][1] * size;
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++) {
+                    const unsigned int* p = src + (2 * (y0 + y)) * srcStride + 2 * (x0 + x);
+                    dst[(y0 + y) * dstStride + x0 + x] =
+                        crispBlend(crispBlend(p[0], p[1]), crispBlend(p[srcStride + 1], p[srcStride]));
+                }
+        }
+        dcacheFlush(dst + 12 * size * dstStride, 4 * size * dstStride * sizeof(unsigned int));
     }
 
     dcacheFlush(&texPixels[16 * texW], 32 * texW * sizeof(unsigned int));

@@ -373,7 +373,7 @@ void worldSettleLiquids(World* w) {
         if (batch.empty()) break;
 
         for (size_t i = 0; i < batch.size(); i++)
-            w->tickSet.erase((unsigned int)worldIndex(w, batch[i].x, batch[i].y, batch[i].z));
+            w->tickSet.erase(tickKey(w, batch[i].x, batch[i].y, batch[i].z, batch[i].tileId));
         for (size_t i = 0; i < batch.size(); i++) {
             TickNextTickData& td = batch[i];
             if (worldBlock(w, td.x, td.y, td.z) == td.tileId)
@@ -457,7 +457,7 @@ void worldTick(World* w) {
         w->tickNextTickList[cursor] = w->tickNextTickList.back();
         w->tickNextTickList.pop_back();
 
-        w->tickSet.erase((unsigned int)worldIndex(w, td.x, td.y, td.z));
+        w->tickSet.erase(tickKey(w, td.x, td.y, td.z, td.tileId));
 
         unsigned char currentId = worldBlock(w, td.x, td.y, td.z);
         if (currentId == td.tileId) {

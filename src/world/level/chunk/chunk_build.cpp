@@ -3,6 +3,7 @@
 #include "world/level/chunk/mesh_sink.h"
 #include "client/renderer/level/frustum.h"
 #include <malloc.h>
+#include <string.h>
 #include <pspkernel.h>
 #include "util/prof.h"
 
@@ -136,9 +137,7 @@ static void buildLayer(const World* w, int ox, int oz, int y0, int y1, int layer
     *outMesh = d; *outCount = emitted;
 }
 
-void chunkBuildSection(ChunkMesh* c, const World* w, int si) {
-
-    ChunkSection* s = &c->sec[si];
+static void buildSectionInto(ChunkMesh* c, ChunkSection* s, const World* w, int si) {
 
     if (!meshHeapReserveOk()) { s->dirty = true; return; }
     s->gen++;
@@ -282,6 +281,128 @@ void chunkBuildSection(ChunkMesh* c, const World* w, int si) {
 
     if (oom) { g_meshOOM = 1; s->dirty = true; }
     else       s->dirty = false;
+}
+
+static SceUID s_meshLock = -1;
+namespace { struct MeshLock {
+    MeshLock() {
+        if (s_meshLock < 0) s_meshLock = sceKernelCreateSema("mcMesh", 0, 1, 1, NULL);
+        if (s_meshLock >= 0) sceKernelWaitSema(s_meshLock, 1, NULL);
+    }
+    ~MeshLock() { if (s_meshLock >= 0) sceKernelSignalSema(s_meshLock, 1); }
+}; }
+
+void chunkBuildSection(ChunkMesh* c, const World* w, int si) {
+    MeshLock lock;
+    buildSectionInto(c, &c->sec[si], w, si);
+}
+
+namespace {
+struct MeshJob {
+    ChunkMesh* c;
+    const World* w;
+    int si, cx, cz;
+    unsigned short gen;
+    ChunkSection result;
+};
+MeshJob s_job;
+volatile bool s_jobPosted = false, s_jobDone = false, s_meshQuit = false;
+int s_meshThid = -1;
+}
+
+static int meshWorker(SceSize, void*) {
+    while (!s_meshQuit) {
+        if (!s_jobPosted || s_jobDone) { sceKernelDelayThread(1000); continue; }
+        {
+            MeshLock lock;
+            memset(&s_job.result, 0, sizeof(s_job.result));
+            buildSectionInto(s_job.c, &s_job.result, s_job.w, s_job.si);
+        }
+        s_jobDone = true;
+    }
+    return 0;
+}
+
+void chunkMeshWorkerStart() {
+    if (s_meshThid >= 0) return;
+    s_meshQuit = false; s_jobPosted = false; s_jobDone = false;
+    s_meshThid = sceKernelCreateThread("chunk_mesh", meshWorker, 0x21, 0x40000,
+                                       PSP_THREAD_ATTR_VFPU, 0);
+    if (s_meshThid >= 0) sceKernelStartThread(s_meshThid, 0, 0);
+}
+
+static void dropResult(ChunkSection* r) {
+    if (r->mesh) free(r->mesh);
+    if (r->water) free(r->water);
+    if (r->leaves) free(r->leaves);
+    if (r->noMip) free(r->noMip);
+    memset(r, 0, sizeof(*r));
+}
+
+void chunkMeshWorkerStop() {
+    if (s_meshThid < 0) return;
+    s_meshQuit = true;
+    sceKernelWaitThreadEnd(s_meshThid, 0);
+    sceKernelDeleteThread(s_meshThid);
+    s_meshThid = -1;
+    if (s_jobPosted) {
+        if (s_jobDone) dropResult(&s_job.result);
+        s_job.c->sec[s_job.si].dirty = true;
+    }
+    s_jobPosted = false; s_jobDone = false;
+}
+
+bool chunkMeshAsyncOn() { return s_meshThid >= 0; }
+bool chunkMeshAsyncIdle() { return !s_jobPosted; }
+
+bool chunkMeshAsyncPins(int cx, int cz) {
+    if (!s_jobPosted) return false;
+    const int dx = cx - s_job.cx, dz = cz - s_job.cz;
+    return dx >= -1 && dx <= 1 && dz >= -1 && dz <= 1;
+}
+
+void chunkMeshAsyncDispatch(ChunkMesh* c, const World* w, int si) {
+    if (s_jobPosted) return;
+    ChunkSection* s = &c->sec[si];
+    s_job.c = c; s_job.w = w; s_job.si = si;
+    s_job.cx = c->ox >> 4; s_job.cz = c->oz >> 4;
+    s_job.gen = s->gen;
+    s->dirty = false;
+    s_jobDone = false;
+    s_jobPosted = true;
+}
+
+int chunkMeshAsyncCollect(const World* w) {
+    if (!s_jobPosted || !s_jobDone) return 0;
+    ChunkSection* r = &s_job.result;
+    ChunkSection* s = &s_job.c->sec[s_job.si];
+    const LevelChunk* lc = worldSlot(w, s_job.cx, s_job.cz);
+    if (s->gen != s_job.gen || !lc->resident || !lc->isAt(s_job.cx, s_job.cz)) {
+        dropResult(r);
+        s_jobPosted = false;
+        return 0;
+    }
+    if (s->mesh)   guDeferFree(s->mesh);
+    if (s->water)  guDeferFree(s->water);
+    if (s->leaves) guDeferFree(s->leaves);
+    if (s->noMip)  guDeferFree(s->noMip);
+    s->mesh = r->mesh;     s->vertexCount = r->vertexCount;
+    s->water = r->water;   s->waterCount = r->waterCount;
+    s->leaves = r->leaves; s->leavesCount = r->leavesCount;
+    s->noMip = r->noMip;   s->noMipCount = r->noMipCount;
+    s->noMipLavaStart = r->noMipLavaStart;
+    s->ox = r->ox; s->oy = r->oy; s->oz = r->oz;
+    s->by0 = r->by0; s->by1 = r->by1;
+    s->lby0 = r->lby0; s->lby1 = r->lby1;
+    s->wby0 = r->wby0; s->wby1 = r->wby1;
+    s->skyLit = r->skyLit;
+    s->leavesOpaqueBand = r->leavesOpaqueBand;
+    s->leavesCullBand = r->leavesCullBand;
+    if (r->dirty) s->dirty = true;
+    s->gen++;
+    memset(r, 0, sizeof(*r));
+    s_jobPosted = false;
+    return 1;
 }
 
 void chunkBuildMesh(ChunkMesh* c, const World* w, int ox, int oz) {

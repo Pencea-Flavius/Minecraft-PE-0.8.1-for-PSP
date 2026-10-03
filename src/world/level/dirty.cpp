@@ -209,7 +209,7 @@ void worldScheduleTick(World* w, int x, int y, int z, unsigned char id, int tick
 
     if (y < 0 || y >= WORLD_H || !worldChunkSettled(w, x >> 4, z >> 4)) return;
 
-    unsigned int key = (unsigned int)worldIndex(w, x, y, z);
+    unsigned int key = tickKey(w, x, y, z, id);
     if (!w->tickSet.insert(key).second) return;
     TickNextTickData td = {x, y, z, id, w->time + tickDelay};
     w->tickNextTickList.push_back(td);

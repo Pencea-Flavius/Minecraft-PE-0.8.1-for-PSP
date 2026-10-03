@@ -399,6 +399,17 @@ static void guCheckLiveBuffer(void) {
     }
 }
 
+void guWaitDrawBufferHidden(void) {
+    for (int i = 0; i < 4; i++) {
+        void* shown = 0; int bw = 0, pf = 0;
+        if (sceDisplayGetFrameBuf(&shown, &bw, &pf, 0) < 0 || !shown) return;
+        const unsigned int live = (unsigned int)shown & 0x0fffffffu;
+        const unsigned int mine = (g_edramBase + (unsigned int)g_fb[g_drawIdx]) & 0x0fffffffu;
+        if (live != mine) return;
+        sceDisplayWaitVblankStart();
+    }
+}
+
 static void guSelectDrawBuffer(void) {
 }
 
@@ -598,6 +609,79 @@ void guEndFrame(void) {
     guFinishFrame();
     guPresent();
     profFrameEnd();
+}
+
+#include <png.h>
+#include <stdio.h>
+#include <malloc.h>
+
+void* guDrawBufferVram(void) {
+    return (void*)((unsigned int)sceGeEdramGetAddr() + (unsigned int)g_fb[g_drawIdx]);
+}
+
+bool guSavePhotoPng(const char* path, int shrink) {
+    if (shrink < 1) shrink = 1;
+    const int outW = GU_SCR_WIDTH / shrink, outH = GU_SCR_HEIGHT / shrink;
+    const int shotBytes = GU_BUF_WIDTH * GU_SCR_HEIGHT * 2;
+
+    unsigned short* shot = (unsigned short*)memalign(64, shotBytes);
+    if (!shot) return false;
+
+    dcacheFlush(shot, shotBytes);
+
+    guWaitGeIdle();
+    sceGuStart(GU_DIRECT, guListCur());
+    sceGuCopyImage(GU_PSM_5650, 0, 0, GU_SCR_WIDTH, GU_SCR_HEIGHT, GU_BUF_WIDTH,
+                   guDrawBufferVram(), 0, 0, GU_BUF_WIDTH, shot);
+
+    guFinishBytes(GUF_PHOTO);
+    sceGuSync(0, 0);
+    guCheckListCanary();
+    guGlobalsCheck(GU_PHASE_PHOTO);
+
+    const unsigned short* shotRd = (const unsigned short*)((unsigned int)shot | 0x40000000u);
+
+    PowerHold hold;
+    FILE* f = fopen(path, "wb");
+    if (!f) { free(shot); return false; }
+    png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, 0, 0, 0);
+    png_infop info = png ? png_create_info_struct(png) : 0;
+    if (!png || !info || setjmp(png_jmpbuf(png))) {
+        if (png) png_destroy_write_struct(&png, info ? &info : 0);
+        fclose(f);
+        free(shot);
+        return false;
+    }
+    png_init_io(png, f);
+    png_set_IHDR(png, info, outW, outH, 8, PNG_COLOR_TYPE_RGB,
+                 PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+    png_write_info(png, info);
+
+    unsigned char row[GU_SCR_WIDTH * 3];
+    const unsigned int n = (unsigned int)(shrink * shrink);
+    for (int y = 0; y < outH; y++) {
+        for (int x = 0; x < outW; x++) {
+            unsigned int r = 0, g = 0, b = 0;
+            for (int sy = 0; sy < shrink; sy++) {
+                const unsigned short* src = shotRd + (y * shrink + sy) * GU_BUF_WIDTH;
+                for (int sx = 0; sx < shrink; sx++) {
+                    unsigned short p = src[x * shrink + sx];
+                    r += (unsigned int)(( p        & 0x1F) << 3);
+                    g += (unsigned int)(((p >> 5)  & 0x3F) << 2);
+                    b += (unsigned int)(((p >> 11) & 0x1F) << 3);
+                }
+            }
+            row[x * 3 + 0] = (unsigned char)(r / n);
+            row[x * 3 + 1] = (unsigned char)(g / n);
+            row[x * 3 + 2] = (unsigned char)(b / n);
+        }
+        png_write_row(png, row);
+    }
+    png_write_end(png, info);
+    png_destroy_write_struct(&png, &info);
+    fclose(f);
+    free(shot);
+    return true;
 }
 
 void guOrtho(void) {

@@ -179,6 +179,7 @@ OBJS = \
 	src/world/level/block_store.o \
 	src/client/renderer/level/worldrender.o \
 	src/client/renderer/level/near_patch.o \
+	src/client/renderer/level/isomap.o \
 	src/world/level/liquid.o \
 	src/world/level/leafdecay.o \
 	src/world/level/tile/tile_behavior.o \

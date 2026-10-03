@@ -20,6 +20,7 @@
 #include "client/renderer/tileentity/tile_entity_renderer.h"
 #include "world/level/chunk/chunk.h"
 #include "platform/path.h"
+#include <pspiofilemgr.h>
 #include "client/renderer/item_hand.h"
 #include "client/renderer/entity/player_model.h"
 #include "client/renderer/particle.h"
@@ -638,7 +639,7 @@ static float        s_worldFogNear  = 0.0f;
 static float        s_worldFogFar   = WORLD_VIEW_DIST;
 static unsigned int s_worldFogColor = SKY_COLOR;
 
-#define CLOUD_FAST_HEIGHT 128.33f
+#define CLOUD_FAST_HEIGHT activeLevelSource().cloudHeight()
 
 #define CLOUD_HEIGHT      CLOUD_FAST_HEIGHT
 
@@ -1299,11 +1300,66 @@ static void renderSelectionOutline(float ex, float ey, float ez) {
     sceGuEnable(GU_TEXTURE_2D);
 }
 
-bool gameProgressScreenUp() { return g_saveRequested || !g_worldBuilt; }
+bool gameProgressScreenUp() { return g_saveRequested || g_isoMapRequested || !g_worldBuilt; }
+
+unsigned int skyIsoBackdropColor() { return g_voidColorNow; }
+
+static MenuState* s_isoMenu = 0;
+static void isoMapProgress(int pct) {
+    if (!guStartFrame(0xFF000000u)) return;
+    drawGeneratingScreen(*s_isoMenu, pct, "Rendering map", "Isometric map");
+    guFinishFrame();
+    guPresent();
+    sceDisplayWaitVblankStart();
+}
 
 void gameRender(MenuState& s) {
 
-    if (g_worldBuilt && g_saveRequested) {
+    if (g_worldBuilt && g_isoMapRequested && !g_saveRequested && !g_photoPending) {
+        static int isoStage = 0, isoHold = 0;
+        static bool isoOk = false;
+        if (isoStage == 0) {
+            drawGeneratingScreen(s, 0, "Rendering map", "Isometric map");
+            isoStage = 1;
+            return;
+        }
+        if (isoStage == 1) {
+
+            char dir[256], full[320];
+            const char* dev = pathDevice();
+            snprintf(dir, sizeof(dir), "%s/PSP", dev);                 sceIoMkdir(dir, 0777);
+            snprintf(dir, sizeof(dir), "%s/PSP/PHOTO", dev);           sceIoMkdir(dir, 0777);
+            snprintf(dir, sizeof(dir), "%s/PSP/PHOTO/Minecraft", dev); sceIoMkdir(dir, 0777);
+            for (int pass = 0; pass < 2; pass++) {
+                if (pass == 1) {
+                    strncpy(dir, assetPath("screenshots"), sizeof(dir) - 1);
+                    dir[sizeof(dir) - 1] = '\0';
+                    sceIoMkdir(dir, 0777);
+                }
+                for (int i = 0; i < 10000; i++) {
+                    snprintf(full, sizeof(full), "%s/map_%04d.png", dir, i);
+                    FILE* probe = fopen(full, "rb");
+                    if (!probe) break;
+                    fclose(probe);
+                }
+                FILE* probe = fopen(full, "wb");
+                if (probe) { fclose(probe); break; }
+            }
+            extern bool isoMapRender(World*, const Texture*, const char*, void (*)(int));
+            guFinishFrame();
+
+            sceDisplayWaitVblankStart();
+            s_isoMenu = &s;
+            isoOk = isoMapRender(&g_world, g_haveTerrain ? &g_terrain : 0, full, isoMapProgress);
+            if (!isoOk) remove(full);
+            guStartFrame(0xFF000000u);
+            isoStage = 2; isoHold = 0;
+        }
+        drawGeneratingScreen(s, 100, isoOk ? "Map saved to Photo" : "Map render failed", "Isometric map");
+        if (++isoHold >= 90) { g_isoMapRequested = false; isoStage = 0; }
+        return;
+    }
+    if (g_worldBuilt && g_saveRequested && !g_photoPending) {
         static int saveStage = 0;
         struct SaveArgs { World* w; long seed; int gamemode; char dir[320]; char name[64]; };
         static SaveArgs sArgs;
@@ -1382,6 +1438,7 @@ void gameRender(MenuState& s) {
                     bool m1 = loadTexMip(&g_terrain, 0, "data/images/terrainMipMapLevel2.png");
                     bool m2 = loadTexMip(&g_terrain, 1, "data/images/terrainMipMapLevel3.png");
                     if (!m1 || !m2) textureGenMips(&g_terrain, 16);
+                    textureBleedTransparent(&g_terrain, 16);
                 }
             }
             if (!g_haveGuiBlocks)
@@ -1576,6 +1633,11 @@ void gameRender(MenuState& s) {
         }
     }
 
+    if (g_photoPending) {
+        ix = g_photoX; iy = g_photoY; iz = g_photoZ;
+        iyaw = g_photoYaw; ipitch = g_photoPitch;
+    }
+
     float px0 = ix, py0 = iy, pz0 = iz;
 
     float bs = 0.0f, bc = 0.0f;
@@ -1601,7 +1663,7 @@ void gameRender(MenuState& s) {
     }
 
     extern int g_thirdPerson;
-    if (g_thirdPerson == 2 && !g_level.player->isSleeping()) {
+    if (g_thirdPerson == 2 && !g_level.player->isSleeping() && !g_photoPending) {
         iyaw  += 180.0f;
         ipitch = -ipitch;
     }
@@ -1612,7 +1674,7 @@ void gameRender(MenuState& s) {
     float rx = cy,       rz = sy;
     float ux = fy * rz,  uy = fz * rx - fx * rz, uz = -fy * rx;
 
-    bool thirdNow = g_thirdPerson && !g_level.player->isSleeping();
+    bool thirdNow = g_thirdPerson && !g_level.player->isSleeping() && !g_photoPending;
     float camBack = 0.0f;
     if (thirdNow) {
         float best = 4.0f;
@@ -1899,7 +1961,8 @@ void gameRender(MenuState& s) {
 
     extern int g_thirdPerson;
 
-    if (g_thirdPerson && !(g_level.player && g_level.player->isSleeping()))
+    if (g_photoPending ||
+        (g_thirdPerson && !(g_level.player && g_level.player->isSleeping())))
         playerModelRender(a);
 
     guListSync();
@@ -1937,7 +2000,7 @@ void gameRender(MenuState& s) {
     extern int g_thirdPerson;
 
     if (!g_thirdPerson && g_level.player && g_level.player->health > 0 &&
-        !g_level.player->isSleeping() && !g_hideGui) {
+        !g_level.player->isSleeping() && !g_photoPending && !g_hideGui) {
         itemHandDraw(a, bs, bc);
     }
 
@@ -1965,7 +2028,7 @@ void gameRender(MenuState& s) {
     if (g_worldBuilt && g_level.player && g_level.player->isSleeping())
         inBedRenderFade(s);
 
-    if (g_worldBuilt && !g_hideGui) {
+    if (g_worldBuilt && !g_photoPending && !g_hideGui) {
         if (g_invOpen) inventoryDraw(s);
         hotbarDraw(s);
     }
