@@ -1391,7 +1391,10 @@ void gameHintsDraw(MenuState& s) {
 
             h[n++] = (ButtonHint){ BTN_ICON_SQUARE,   PSP_CTRL_SQUARE,   "Crafting" };
             h[n++] = (ButtonHint){ BTN_ICON_TRIANGLE, PSP_CTRL_TRIANGLE, "Armour" };
-            if (!g_classicPick) {
+            if (controlSchemeActive() == SCHEME_VITA) {
+                h[n++] = (ButtonHint){ BTN_ICON_LEFT,  PSP_CTRL_LEFT,  "" };
+                h[n++] = (ButtonHint){ BTN_ICON_RIGHT, PSP_CTRL_RIGHT, "Change Slot" };
+            } else if (!g_classicPick) {
                 h[n++] = (ButtonHint){ menuShoulderIcon(false), PSP_CTRL_LTRIGGER, "" };
                 h[n++] = (ButtonHint){ menuShoulderIcon(true),  PSP_CTRL_RTRIGGER, "Change Slot" };
             }

@@ -297,14 +297,14 @@ void gameUpdate(MenuState& s, unsigned int pressed, const SceCtrlData& padIn) {
 
         if (inv->selected >= Inventory::HOTBAR) inv->selectSlot(0);
 
-        const bool vitaCreative = inv->isCreative() && controlSchemeActive() == SCHEME_VITA;
+        const bool vitaInv = controlSchemeActive() == SCHEME_VITA;
 
-        if (!g_classicPick || vitaCreative) {
+        if (!g_classicPick || vitaInv) {
             int slotStep = 0;
-            const unsigned int prevBtn = vitaCreative ? PSP_CTRL_LEFT  : PSP_CTRL_LTRIGGER;
-            const unsigned int nextBtn = vitaCreative ? PSP_CTRL_RIGHT : PSP_CTRL_RTRIGGER;
+            const unsigned int prevBtn = vitaInv ? PSP_CTRL_LEFT  : PSP_CTRL_LTRIGGER;
+            const unsigned int nextBtn = vitaInv ? PSP_CTRL_RIGHT : PSP_CTRL_RTRIGGER;
             const int stickX = (int)pad.Lx - 128;
-            const bool stickSide = vitaCreative && (stickX < -48 || stickX > 48);
+            const bool stickSide = vitaInv && (stickX < -48 || stickX > 48);
             if (!stickSide && (uiPressed & prevBtn)) slotStep = -1;
             if (!stickSide && (uiPressed & nextBtn)) slotStep =  1;
             if (slotStep) {
@@ -319,7 +319,7 @@ void gameUpdate(MenuState& s, unsigned int pressed, const SceCtrlData& padIn) {
         }
 
         int mvx = 0, mvy = 0;
-        if (!vitaCreative) {
+        if (!vitaInv) {
         if (uiPressed & PSP_CTRL_LEFT)  mvx = -1;
         if (uiPressed & PSP_CTRL_RIGHT) mvx =  1;
         if (uiPressed & PSP_CTRL_UP)    mvy = -1;
@@ -349,7 +349,7 @@ void gameUpdate(MenuState& s, unsigned int pressed, const SceCtrlData& padIn) {
             const int n = creativeCount();
 
             int tabStep = 0;
-            if (g_classicPick || vitaCreative) {
+            if (g_classicPick || vitaInv) {
                 if (uiPressed & PSP_CTRL_LTRIGGER)  tabStep = -1;
                 if (uiPressed & PSP_CTRL_RTRIGGER)  tabStep =  1;
             } else {

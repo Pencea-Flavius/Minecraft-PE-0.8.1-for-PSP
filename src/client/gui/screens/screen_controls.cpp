@@ -797,11 +797,15 @@ unsigned int controlSchemeRemap(unsigned int buttons) {
 }
 
 unsigned int controlSchemeStickFilter(unsigned int buttons, unsigned char rx, unsigned char ry) {
-    if (controlSchemeActive() != SCHEME_VITA || !(rx || ry)) return buttons;
+    static unsigned int s_eaten = 0;
+    s_eaten &= buttons;
+    if (controlSchemeActive() != SCHEME_VITA || !(rx || ry)) return buttons & ~s_eaten;
     const int DZ = 32;
-    if ((int)ry < 128 - DZ) buttons &= ~PSP_CTRL_TRIANGLE;
-    if ((int)ry > 128 + DZ) buttons &= ~PSP_CTRL_CROSS;
-    if ((int)rx < 128 - DZ) buttons &= ~PSP_CTRL_SQUARE;
-    if ((int)rx > 128 + DZ) buttons &= ~PSP_CTRL_CIRCLE;
-    return buttons;
+    unsigned int eat = 0;
+    if ((int)ry < 128 - DZ) eat |= PSP_CTRL_TRIANGLE;
+    if ((int)ry > 128 + DZ) eat |= PSP_CTRL_CROSS;
+    if ((int)rx < 128 - DZ) eat |= PSP_CTRL_SQUARE;
+    if ((int)rx > 128 + DZ) eat |= PSP_CTRL_CIRCLE;
+    s_eaten |= eat & buttons;
+    return buttons & ~s_eaten;
 }
