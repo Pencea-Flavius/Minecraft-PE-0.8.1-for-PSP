@@ -322,6 +322,7 @@ int main(int argc, char* argv[]) {
         sceCtrlPeekBufferPositive(&pad, 1);
 
         controlSchemeNotePad(pad.Buttons, pad.Rx, pad.Ry);
+        pad.Buttons = controlSchemeStickFilter(pad.Buttons, pad.Rx, pad.Ry);
 
         const bool systemFrame = (pad.Buttons & (PSP_CTRL_HOME | PSP_CTRL_HOLD)) != 0;
         if (systemFrame) {

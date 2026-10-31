@@ -29,6 +29,8 @@ unsigned int menuFaceSwap(unsigned int buttons);
 
 unsigned int controlSchemeRemap(unsigned int buttons);
 
+unsigned int controlSchemeStickFilter(unsigned int buttons, unsigned char rx, unsigned char ry);
+
 unsigned int controlSchemeButtonFor(unsigned int logical);
 
 void controlSchemeCombos(unsigned int& pressed, unsigned int& held);

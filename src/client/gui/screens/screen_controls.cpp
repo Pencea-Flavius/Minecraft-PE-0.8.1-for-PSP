@@ -795,3 +795,13 @@ unsigned int controlSchemeRemap(unsigned int buttons) {
         if (buttons & kPhys[scheme][a]) out |= kLogical[a];
     return out;
 }
+
+unsigned int controlSchemeStickFilter(unsigned int buttons, unsigned char rx, unsigned char ry) {
+    if (controlSchemeActive() != SCHEME_VITA || !(rx || ry)) return buttons;
+    const int DZ = 32;
+    if ((int)ry < 128 - DZ) buttons &= ~PSP_CTRL_TRIANGLE;
+    if ((int)ry > 128 + DZ) buttons &= ~PSP_CTRL_CROSS;
+    if ((int)rx < 128 - DZ) buttons &= ~PSP_CTRL_SQUARE;
+    if ((int)rx > 128 + DZ) buttons &= ~PSP_CTRL_CIRCLE;
+    return buttons;
+}

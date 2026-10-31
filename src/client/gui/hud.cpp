@@ -1372,7 +1372,12 @@ void gameHintsDraw(MenuState& s) {
         h[n++] = menuFaceHint(false, "Exit");
 
         if (g_level.player->inventory->isCreative()) {
-            if (g_classicPick) {
+            if (controlSchemeActive() == SCHEME_VITA) {
+                h[n++] = (ButtonHint){ menuShoulderIcon(false), PSP_CTRL_LTRIGGER, "" };
+                h[n++] = (ButtonHint){ menuShoulderIcon(true),  PSP_CTRL_RTRIGGER, "Change Tab" };
+                h[n++] = (ButtonHint){ BTN_ICON_LEFT,  PSP_CTRL_LEFT,  "" };
+                h[n++] = (ButtonHint){ BTN_ICON_RIGHT, PSP_CTRL_RIGHT, "Change Slot" };
+            } else if (g_classicPick) {
                 h[n++] = (ButtonHint){ menuShoulderIcon(false), PSP_CTRL_LTRIGGER, "" };
                 h[n++] = (ButtonHint){ menuShoulderIcon(true),  PSP_CTRL_RTRIGGER, "Change Tab" };
             } else {
