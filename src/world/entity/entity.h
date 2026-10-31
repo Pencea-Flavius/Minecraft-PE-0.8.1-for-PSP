@@ -181,6 +181,7 @@ public:
     int airSupply;
     int onFire;
     int flameTime;
+    int flameTick;
 
     Entity* rider;
     Entity* riding;

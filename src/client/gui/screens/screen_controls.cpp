@@ -1,5 +1,6 @@
 
 #include <pspctrl.h>
+#include <pspiofilemgr.h>
 #include <pspgu.h>
 #include <cstdio>
 #include <cmath>
@@ -19,6 +20,7 @@ extern int g_southpaw;
 extern int g_fineAim;
 
 int g_controlScheme = 0;
+int g_isVita = 0;
 
 static bool s_open = false;
 bool controlsPageIsOpen() { return s_open; }
@@ -62,9 +64,14 @@ const unsigned int kPhys[CONTROL_SCHEMES][CA_COUNT] = {
       PSP_CTRL_L1, PSP_CTRL_R1,
       0, 0, 0, 0,
       PSP_CTRL_CIRCLE, PSP_CTRL_TRIANGLE, PSP_CTRL_SQUARE, PSP_CTRL_L3 },
+
+    { PSP_CTRL_LTRIGGER, PSP_CTRL_RTRIGGER, PSP_CTRL_CROSS, PSP_CTRL_DOWN, 0,
+      PSP_CTRL_LEFT, PSP_CTRL_RIGHT,
+      0, 0, 0, 0,
+      PSP_CTRL_CIRCLE, PSP_CTRL_TRIANGLE, PSP_CTRL_SQUARE, PSP_CTRL_UP },
 };
 
-const bool kComboInv[CONTROL_SCHEMES] = { false, true, true, false };
+const bool kComboInv[CONTROL_SCHEMES] = { false, true, true, false, false };
 
 bool s_haveController = false;
 
@@ -93,9 +100,11 @@ int     s_artKey  = -1;
 #define ART_KEY_PSP 0
 #define ART_KEY_GO  1
 #define ART_KEY_DS3 2
+#define ART_KEY_VITA 3
 
 int artKey(int layout) {
-    if (layout == CONTROL_SCHEMES - 1) return ART_KEY_DS3;
+    if (layout == SCHEME_VITA) return ART_KEY_VITA;
+    if (layout == SCHEME_DS3) return ART_KEY_DS3;
     return g_pspIsGo ? ART_KEY_GO : ART_KEY_PSP;
 }
 
@@ -108,7 +117,8 @@ void artEnsure(int layout) {
     const int key = artKey(layout);
     if (s_artKey == key) return;
     artFree();
-    const char* name = (key == ART_KEY_DS3) ? "ds3" : (key == ART_KEY_GO) ? "go" : "psp";
+    const char* name = (key == ART_KEY_VITA) ? "vita" : (key == ART_KEY_DS3) ? "ds3"
+                     : (key == ART_KEY_GO) ? "go" : "psp";
     char rel[64];
     snprintf(rel, sizeof(rel), "data/images/gui/controls/%s.png", name);
 
@@ -183,6 +193,25 @@ Anchor kAnchorsGo[] = {
 
     { PSP_CTRL_START,    47.5f, 57.5f },
 };
+Anchor kAnchorsVita[] = {
+    { PSP_CTRL_LTRIGGER,  17.0f,  11.0f },
+    { PSP_CTRL_RTRIGGER, 143.0f,  11.0f },
+    { PSP_CTRL_UP,        21.5f,  22.0f },
+    { PSP_CTRL_LEFT,      13.5f,  30.0f },
+    { PSP_CTRL_RIGHT,     28.5f,  30.0f },
+    { PSP_CTRL_DOWN,      21.5f,  37.0f },
+    { PSP_CTRL_TRIANGLE, 138.5f,  22.0f },
+    { PSP_CTRL_SQUARE,   131.0f,  30.0f },
+    { PSP_CTRL_CIRCLE,   146.5f,  30.0f },
+    { PSP_CTRL_CROSS,    138.5f,  37.0f },
+    { PSP_CTRL_START,    143.0f,  60.0f },
+};
+Pseudo kPseudoVita[] = {
+    { "Move",  26.5f,  50.0f, 0.0f },
+    { "Look", 133.5f,  50.0f, 0.0f },
+    { "Pause", 143.0f,  60.0f, 0.0f },
+};
+
 Pseudo kPseudoGo[] = {
     { "Move", 31.0f, 55.5f, 0.0f },
     { "Inventory", 46.5f, 29.0f, 4.0f },
@@ -205,6 +234,9 @@ ArtAnchors anchorsForArt(int artKey) {
     if (artKey == ART_KEY_DS3) {
         a.an = kAnchorsDs3; a.anCount = (int)(sizeof(kAnchorsDs3) / sizeof(kAnchorsDs3[0]));
         a.ps = kPseudoDs3;  a.psCount = (int)(sizeof(kPseudoDs3) / sizeof(kPseudoDs3[0]));
+    } else if (artKey == ART_KEY_VITA) {
+        a.an = kAnchorsVita; a.anCount = (int)(sizeof(kAnchorsVita) / sizeof(kAnchorsVita[0]));
+        a.ps = kPseudoVita;  a.psCount = (int)(sizeof(kPseudoVita) / sizeof(kPseudoVita[0]));
     } else if (artKey == ART_KEY_GO) {
         a.an = kAnchorsGo;  a.anCount = (int)(sizeof(kAnchorsGo) / sizeof(kAnchorsGo[0]));
         a.ps = kPseudoGo;   a.psCount = (int)(sizeof(kPseudoGo) / sizeof(kPseudoGo[0]));
@@ -353,7 +385,7 @@ void anchorsSave(int artKey) {
     if (!a.anCount) return;
     FILE* f = fopen(assetPath("controls_anchors.txt"), "w");
     if (!f) return;
-    const char* which = (artKey == ART_KEY_DS3) ? "Ds3"
+    const char* which = (artKey == ART_KEY_VITA) ? "Vita" : (artKey == ART_KEY_DS3) ? "Ds3"
                       : (artKey == ART_KEY_GO)  ? "Go" : "Psp";
     fprintf(f, "// Written by the in-game anchor editor: Options > Controls > Open,\n"
                "// then START. Paste these over the tables in screen_controls.cpp.\n\n");
@@ -386,7 +418,7 @@ void drawEditor(MenuState& s, float artX, float artY, float k) {
     drawRect(cx - 5.0f, cy, 11.0f, 1.0f, CYAN);
     drawRect(cx, cy - 5.0f, 1.0f, 11.0f, CYAN);
 
-    const char* art = (s_artKey == ART_KEY_DS3) ? "ds3"
+    const char* art = (s_artKey == ART_KEY_VITA) ? "vita" : (s_artKey == ART_KEY_DS3) ? "ds3"
                     : (s_artKey == ART_KEY_GO)  ? "go" : "psp";
     char line[80];
     snprintf(line, sizeof(line), "%s  %d/%d  %s  %.1f, %.1f  step %.1f",
@@ -507,18 +539,29 @@ int s_sel = SEL_LAYOUT;
 
 void controlsPageOpen() {
     s_open = true;
-    artEnsure(g_controlScheme);
+    artEnsure(controlSchemeActive());
 }
 
 void controlSchemeNotePad(unsigned int buttons, unsigned char rx, unsigned char ry) {
-    if (s_haveController) return;
+    static bool s_sawPadButton = false;
+    if (s_sawPadButton) return;
 
     if (buttons & (PSP_CTRL_L1 | PSP_CTRL_R1 | PSP_CTRL_L3 | PSP_CTRL_R3)) {
-        s_haveController = true;
+        s_sawPadButton = s_haveController = true;
+        g_isVita = 0;
         return;
     }
 
-    if ((rx || ry) && rx > 88 && rx < 168 && ry > 88 && ry < 168) s_haveController = true;
+    if (!s_haveController && (rx || ry) && rx > 88 && rx < 168 && ry > 88 && ry < 168) {
+        s_haveController = true;
+        int emu = 0;
+        g_isVita = !(sceIoDevctl("kemulator:", 3, 0, 0, &emu, sizeof(emu)) == 0 && emu);
+    }
+}
+
+int controlSchemeActive() {
+    if (g_isVita) return SCHEME_VITA;
+    return controlSchemeAvailable(g_controlScheme) ? g_controlScheme : 0;
 }
 
 #if CONTROLS_ANCHOR_EDITOR
@@ -528,13 +571,12 @@ bool controlsPageEditing() { return false; }
 #endif
 
 bool fineAimApplies() {
-    int scheme = g_controlScheme;
-    if (!controlSchemeAvailable(scheme) || scheme < 0 || scheme >= CONTROL_SCHEMES) scheme = 0;
+    int scheme = controlSchemeActive();
     return kPhys[scheme][CA_LOOK_L] != 0 && !g_southpaw;
 }
 
 bool controlSchemeIsPadLayout() {
-    return g_controlScheme == CONTROL_SCHEMES - 1 && controlSchemeAvailable(g_controlScheme);
+    return controlSchemeActive() == SCHEME_DS3;
 }
 
 unsigned int controlSchemeMenuAlias(unsigned int buttons) {
@@ -545,7 +587,8 @@ unsigned int controlSchemeMenuAlias(unsigned int buttons) {
 }
 
 bool controlSchemeAvailable(int scheme) {
-    return scheme != CONTROL_SCHEMES - 1 || s_haveController;
+    if (scheme == SCHEME_VITA) return g_isVita != 0;
+    return scheme != SCHEME_DS3 || (s_haveController && !g_isVita);
 }
 
 int g_japaneseLayout = 0;
@@ -574,15 +617,17 @@ void controlsPageRender(MenuState& s) {
     const float panelCx = CTL_PANEL_X + CTL_PANEL_W * 0.5f;
 
     char caption[48];
-    snprintf(caption, sizeof(caption), "Current Controls : Layout %d", g_controlScheme + 1);
+    if (g_isVita) snprintf(caption, sizeof(caption), "Current Controls : PS Vita");
+    else snprintf(caption, sizeof(caption), "Current Controls : Layout %d", g_controlScheme + 1);
     float cw = fontTextWidth(&s.font, caption) * CTL_TEXT;
     fontDrawTextShadow(&s.font, panelCx * UI_SCALE - cw / 2.0f, CTL_CAPTION_Y * UI_SCALE,
                        caption, 0xFFFFFFFFu, CTL_TEXT);
 
     const bool onLayout = (s_sel == SEL_LAYOUT);
-    float span = CTL_BTN_W * CONTROL_SCHEMES + (CTL_BTN_PITCH - CTL_BTN_W) * (CONTROL_SCHEMES - 1);
+    const int shown = g_isVita ? 0 : SCHEME_VITA;
+    float span = CTL_BTN_W * shown + (CTL_BTN_PITCH - CTL_BTN_W) * (shown - 1);
     float bx0  = panelCx - span * 0.5f;
-    for (int i = 0; i < CONTROL_SCHEMES; i++) {
+    for (int i = 0; i < shown; i++) {
         char num[4]; snprintf(num, sizeof(num), "%d", i + 1);
         bool live = (g_controlScheme == i);
 
@@ -621,35 +666,40 @@ void controlsPageRender(MenuState& s) {
         }
     }
 
-    artEnsure(g_controlScheme);
+    artEnsure(controlSchemeActive());
     if (s_artHave) {
         const int boxW = (int)(CTL_ART_W * UI_SCALE), boxH = (int)(CTL_ART_H * UI_SCALE);
         int k = 1;
         while (s_art.realW * (k + 1) <= boxW && s_art.realH * (k + 1) <= boxH) k++;
+        if (s_artKey == ART_KEY_VITA) k = 2;
         const float dw = (float)(s_art.realW * k), dh = (float)(s_art.realH * k);
+        const float artMid = (s_artKey == ART_KEY_VITA)
+                           ? (CTL_PANEL_Y + CTL_PANEL_H + VH) * 0.5f : CTL_ART_Y + CTL_ART_H * 0.5f;
+        const float artTop = floorf(artMid * UI_SCALE - dh * 0.5f);
 
         textureBind(&s_art);
         spriteDraw(&s_art,
                    floorf((CTL_ART_X + CTL_ART_W * 0.5f) * UI_SCALE - dw * 0.5f),
-                   floorf((CTL_ART_Y + CTL_ART_H * 0.5f) * UI_SCALE - dh * 0.5f),
+                   artTop,
                    dw, dh, 0.0f, 0.0f, (float)s_art.realW, (float)s_art.realH, WHITE);
 #if CONTROLS_ANCHOR_EDITOR
         drawEditor(s,
                    floorf((CTL_ART_X + CTL_ART_W * 0.5f) * UI_SCALE - dw * 0.5f),
-                   floorf((CTL_ART_Y + CTL_ART_H * 0.5f) * UI_SCALE - dh * 0.5f),
+                   artTop,
                    (float)k);
 #endif
-        drawLeaders(s, g_controlScheme, s_artKey,
+        drawLeaders(s, controlSchemeActive(), s_artKey,
                     floorf((CTL_ART_X + CTL_ART_W * 0.5f) * UI_SCALE - dw * 0.5f),
-                    floorf((CTL_ART_Y + CTL_ART_H * 0.5f) * UI_SCALE - dh * 0.5f),
+                    artTop,
                     dw, dh, (float)k);
     }
 }
 
 static void cycleScheme(int dir) {
+    if (g_isVita) return;
     int n = g_controlScheme + dir;
-    if (n < 0) n = CONTROL_SCHEMES - 1;
-    if (n >= CONTROL_SCHEMES) n = 0;
+    if (n < 0) n = SCHEME_VITA - 1;
+    if (n >= SCHEME_VITA) n = 0;
 
     optionsSetControlScheme(n);
 }
@@ -724,9 +774,8 @@ void controlsPageInput(MenuState& s, unsigned int pressed) {
 }
 
 unsigned int controlSchemeButtonFor(unsigned int logical) {
-    int scheme = g_controlScheme;
-    if (!controlSchemeAvailable(scheme)) scheme = 0;
-    if (scheme <= 0 || scheme >= CONTROL_SCHEMES) return logical;
+    int scheme = controlSchemeActive();
+    if (scheme <= 0) return logical;
     for (int a = 0; a < CA_COUNT; a++)
         if (kLogical[a] == logical) return kPhys[scheme][a];
     return logical;
@@ -734,8 +783,7 @@ unsigned int controlSchemeButtonFor(unsigned int logical) {
 
 void controlSchemeCombos(unsigned int& pressed, unsigned int& held) {
     static bool was = false;
-    int scheme = g_controlScheme;
-    if (!controlSchemeAvailable(scheme)) scheme = 0;
+    int scheme = controlSchemeActive();
 
     unsigned int both = 0;
     for (int a = 0; a < CA_COUNT; a++)
@@ -751,10 +799,8 @@ void controlSchemeCombos(unsigned int& pressed, unsigned int& held) {
 }
 
 unsigned int controlSchemeRemap(unsigned int buttons) {
-    int scheme = g_controlScheme;
-
-    if (!controlSchemeAvailable(scheme)) scheme = 0;
-    if (scheme <= 0 || scheme >= CONTROL_SCHEMES) return buttons;
+    int scheme = controlSchemeActive();
+    if (scheme <= 0) return buttons;
 
     unsigned int owned = 0;
     for (int a = 0; a < CA_COUNT; a++) owned |= kLogical[a] | kPhys[scheme][a];

@@ -97,7 +97,7 @@ MobAnim mobAnimSetup(Mob* mob, float rot, float a);
 
 #define MOB_MAX_PARTS 16
 
-struct MobPart { MobVertex base[36]; float px, py, pz; float xRot, yRot, zRot; bool head; };
+struct MobPart { MobVertex base[36]; float px, py, pz; float xRot, yRot, zRot; bool head; bool noCull; };
 
 bool mobNearMatrix(float vm[16], float* minEdge, float* safePerEdge);
 

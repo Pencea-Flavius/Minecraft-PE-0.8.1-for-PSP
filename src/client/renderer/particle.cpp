@@ -459,7 +459,7 @@ void particlesCrit(float x, float y, float z, float xa, float ya, float za) {
 }
 
 void particlesEntityFlame(Entity* e) {
-    static int s_tick = 0;
+    int& s_tick = e->flameTick;
     const float rx = e->bb.x0 + frand() * (e->bb.x1 - e->bb.x0);
     const float ry = e->bb.y0 + frand() * (e->bb.y1 - e->bb.y0);
     const float rz = e->bb.z0 + frand() * (e->bb.z1 - e->bb.z0);

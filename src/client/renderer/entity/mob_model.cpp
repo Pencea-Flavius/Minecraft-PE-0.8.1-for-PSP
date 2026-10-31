@@ -103,12 +103,9 @@ void mobFireOverlayBegin(float alpha) {
     sceGuTexEnvColor(ORANGE);
     sceGuColor((a8 << 24) | ORANGE);
     sceGuDepthMask(GU_TRUE);
-    sceGuEnable(GU_CULL_FACE);
-    sceGuFrontFace(GU_CCW);
 }
 
 void mobFireOverlayEnd() {
-    sceGuDisable(GU_CULL_FACE);
     sceGuDepthMask(GU_FALSE);
     sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
 }
@@ -258,7 +255,9 @@ void mobRenderParts(Mob* mob, MobPart* parts, int count, Texture* tex,
     }
 
     sceGuColor(brCol);
+    sceGuFrontFace(GU_CCW);
     for (int i = 0; i < count; i++) {
+        sceGuSetStatus(GU_CULL_FACE, !parts[i].noCull);
         sceGumPushMatrix();
         MOB_BABY_XFORM(i);
         ScePspFVector3 piv = { parts[i].px, parts[i].py, parts[i].pz }; sceGumTranslate(&piv);
@@ -268,6 +267,7 @@ void mobRenderParts(Mob* mob, MobPart* parts, int count, Texture* tex,
         mobDrawPartLit(parts[i].base, brCol);
         sceGumPopMatrix();
     }
+    sceGuDisable(GU_CULL_FACE);
     sceGuColor(brCol);
 
     if (bowPartIndex >= 0 && bowPartIndex < count) {
@@ -303,7 +303,9 @@ void mobRenderParts(Mob* mob, MobPart* parts, int count, Texture* tex,
 
     if (fireA > 0.0f) {
         mobFireOverlayBegin(fireA);
+        sceGuFrontFace(GU_CCW);
         for (int i = 0; i < count; i++) {
+            sceGuSetStatus(GU_CULL_FACE, !parts[i].noCull);
             sceGumPushMatrix();
             MOB_BABY_XFORM(i);
             ScePspFVector3 piv = { parts[i].px, parts[i].py, parts[i].pz }; sceGumTranslate(&piv);
@@ -313,6 +315,7 @@ void mobRenderParts(Mob* mob, MobPart* parts, int count, Texture* tex,
             mobDrawPartPlain(parts[i].base);
             sceGumPopMatrix();
         }
+        sceGuDisable(GU_CULL_FACE);
         mobFireOverlayEnd();
     }
 
@@ -328,6 +331,7 @@ void mobRenderParts(Mob* mob, MobPart* parts, int count, Texture* tex,
         sceGuFrontFace(GU_CCW);
         sceGuColor(WHITE);
         for (int i = 0; i < count; i++) {
+            sceGuSetStatus(GU_CULL_FACE, !parts[i].noCull);
             sceGumPushMatrix();
             MOB_BABY_XFORM(i);
             ScePspFVector3 piv = { parts[i].px, parts[i].py, parts[i].pz }; sceGumTranslate(&piv);

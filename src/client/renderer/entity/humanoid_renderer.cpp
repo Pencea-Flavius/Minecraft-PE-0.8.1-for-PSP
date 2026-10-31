@@ -48,6 +48,7 @@ static void build() {
     if (g_built) return;
     buildInto(partsN, false);
     buildInto(partsT, true);
+    partsT[P_BODY].noCull = true;
 
     dcacheFlush(partsN, sizeof(partsN));
     dcacheFlush(partsT, sizeof(partsT));

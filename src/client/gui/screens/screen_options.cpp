@@ -306,7 +306,7 @@ void optionsCycleCameraMode() {
 }
 
 void optionsSetControlScheme(int scheme) {
-    if (scheme < 0 || scheme >= CONTROL_SCHEMES) return;
+    if (scheme < 0 || scheme >= SCHEME_VITA) return;
     g_optionValueIdx[CAT_CONTROLS][ROW_SCHEME] = scheme;
     optionsApply();
 }

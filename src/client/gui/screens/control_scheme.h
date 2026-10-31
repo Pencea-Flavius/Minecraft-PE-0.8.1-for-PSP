@@ -4,9 +4,14 @@
 
 #include "client/gui/screens/menu.h"
 
-#define CONTROL_SCHEMES 4
+#define CONTROL_SCHEMES 5
+#define SCHEME_DS3      3
+#define SCHEME_VITA     4
 
 extern int g_controlScheme;
+extern int g_isVita;
+
+int controlSchemeActive();
 
 #define ACT_DROP        0x04000000u
 #define ACT_INVENTORY   0x08000000u

@@ -64,7 +64,7 @@ Entity::Entity(Level* level)
     xOld(0), yOld(0), zOld(0),
     ySlideOffset(0), footSize(0), pushthrough(0),
     tickCount(0), invulnerableTime(0),
-    airSupply(TOTAL_AIR_SUPPLY), onFire(0), flameTime(1),
+    airSupply(TOTAL_AIR_SUPPLY), onFire(0), flameTime(1), flameTick(0),
     rider(0), riding(0), entityRendererId(ER_DEFAULT_RENDERER),
     fallDistance(0), blocksBuilding(false), inChunk(false),
     onGround(false),
