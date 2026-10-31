@@ -9,7 +9,6 @@
 #define SCHEME_VITA     4
 
 extern int g_controlScheme;
-extern int g_isVita;
 
 int controlSchemeActive();
 

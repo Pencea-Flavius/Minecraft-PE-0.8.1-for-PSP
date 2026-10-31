@@ -1,6 +1,5 @@
 
 #include <pspctrl.h>
-#include <pspiofilemgr.h>
 #include <pspgu.h>
 #include <cstdio>
 #include <cmath>
@@ -20,7 +19,6 @@ extern int g_southpaw;
 extern int g_fineAim;
 
 int g_controlScheme = 0;
-int g_isVita = 0;
 
 static bool s_open = false;
 bool controlsPageIsOpen() { return s_open; }
@@ -543,24 +541,15 @@ void controlsPageOpen() {
 }
 
 void controlSchemeNotePad(unsigned int buttons, unsigned char rx, unsigned char ry) {
-    static bool s_sawPadButton = false;
-    if (s_sawPadButton) return;
-
+    if (s_haveController) return;
     if (buttons & (PSP_CTRL_L1 | PSP_CTRL_R1 | PSP_CTRL_L3 | PSP_CTRL_R3)) {
-        s_sawPadButton = s_haveController = true;
-        g_isVita = 0;
+        s_haveController = true;
         return;
     }
-
-    if (!s_haveController && (rx || ry) && rx > 88 && rx < 168 && ry > 88 && ry < 168) {
-        s_haveController = true;
-        int emu = 0;
-        g_isVita = !(sceIoDevctl("kemulator:", 3, 0, 0, &emu, sizeof(emu)) == 0 && emu);
-    }
+    if ((rx || ry) && rx > 88 && rx < 168 && ry > 88 && ry < 168) s_haveController = true;
 }
 
 int controlSchemeActive() {
-    if (g_isVita) return SCHEME_VITA;
     return controlSchemeAvailable(g_controlScheme) ? g_controlScheme : 0;
 }
 
@@ -587,8 +576,7 @@ unsigned int controlSchemeMenuAlias(unsigned int buttons) {
 }
 
 bool controlSchemeAvailable(int scheme) {
-    if (scheme == SCHEME_VITA) return g_isVita != 0;
-    return scheme != SCHEME_DS3 || (s_haveController && !g_isVita);
+    return scheme != SCHEME_DS3 || s_haveController;
 }
 
 int g_japaneseLayout = 0;
@@ -617,14 +605,13 @@ void controlsPageRender(MenuState& s) {
     const float panelCx = CTL_PANEL_X + CTL_PANEL_W * 0.5f;
 
     char caption[48];
-    if (g_isVita) snprintf(caption, sizeof(caption), "Current Controls : PS Vita");
-    else snprintf(caption, sizeof(caption), "Current Controls : Layout %d", g_controlScheme + 1);
+    snprintf(caption, sizeof(caption), "Current Controls : Layout %d", g_controlScheme + 1);
     float cw = fontTextWidth(&s.font, caption) * CTL_TEXT;
     fontDrawTextShadow(&s.font, panelCx * UI_SCALE - cw / 2.0f, CTL_CAPTION_Y * UI_SCALE,
                        caption, 0xFFFFFFFFu, CTL_TEXT);
 
     const bool onLayout = (s_sel == SEL_LAYOUT);
-    const int shown = g_isVita ? 0 : SCHEME_VITA;
+    const int shown = CONTROL_SCHEMES;
     float span = CTL_BTN_W * shown + (CTL_BTN_PITCH - CTL_BTN_W) * (shown - 1);
     float bx0  = panelCx - span * 0.5f;
     for (int i = 0; i < shown; i++) {
@@ -696,10 +683,9 @@ void controlsPageRender(MenuState& s) {
 }
 
 static void cycleScheme(int dir) {
-    if (g_isVita) return;
     int n = g_controlScheme + dir;
-    if (n < 0) n = SCHEME_VITA - 1;
-    if (n >= SCHEME_VITA) n = 0;
+    if (n < 0) n = CONTROL_SCHEMES - 1;
+    if (n >= CONTROL_SCHEMES) n = 0;
 
     optionsSetControlScheme(n);
 }

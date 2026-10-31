@@ -68,7 +68,7 @@ static const OptionRowDef g_optionRows[OPT_CATEGORIES][OPT_MAX_ROWS] = {
 
         { 0,       "Classic Item Pick", {"Off", "On", 0, 0}, 2, 0 },
 
-        { 0,       "Control Scheme", {"Layout 1", "Layout 2", "Layout 3", "Layout 4"}, 4, 0,
+        { 0,       "Control Scheme", {"Layout 1", "Layout 2", "Layout 3", "Layout 4", "Layout 5"}, 5, 0,
           false, 0, 0, true },
     },
     {
@@ -306,7 +306,7 @@ void optionsCycleCameraMode() {
 }
 
 void optionsSetControlScheme(int scheme) {
-    if (scheme < 0 || scheme >= SCHEME_VITA) return;
+    if (scheme < 0 || scheme >= CONTROL_SCHEMES) return;
     g_optionValueIdx[CAT_CONTROLS][ROW_SCHEME] = scheme;
     optionsApply();
 }
